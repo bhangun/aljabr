@@ -1,262 +1,291 @@
 package tech.kayys.aljabr.backend.cuda;
 
+import org.jboss.logging.Logger;
+import tech.kayys.aljabr.cuda.binding.CudaBinding;
 import tech.kayys.aljabr.core.backend.ComputeBackend;
-import tech.kayys.aljabr.core.tensor.DType;
-import tech.kayys.aljabr.core.tensor.DeviceType;
-import tech.kayys.aljabr.core.tensor.Tensor;
+import tech.kayys.aljabr.core.tensor.*;
+import tech.kayys.aljabr.core.memory.CpuBuffer;
+import tech.kayys.aljabr.backend.cpu.CpuBackend;
+
+import java.lang.foreign.MemorySegment;
 import java.util.List;
 
 /**
- * CUDA compute backend using FFM API for GPU-accelerated tensor operations.
- * Method bodies delegate to native CUDA kernels via downcall handles;
- * unimplemented kernels throw {@link UnsupportedOperationException}.
+ * CUDA hardware-accelerated computation backend.
  */
-public final class CUDABackend implements ComputeBackend {
+public class CUDABackend implements ComputeBackend {
 
-    private static final String TODO = "CUDA kernel not yet bound via FFM";
+    private static final Logger LOG = Logger.getLogger(CUDABackend.class);
+    private static final String FORCE_CPU_PROPERTY = "aljabr.kernel.force.cpu";
 
-    @Override
-    public Tensor add(Tensor a, Tensor b) {
-        throw new UnsupportedOperationException(TODO);
+    private final CudaBinding cudaBinding;
+    private final CpuBackend cpuFallback;
+    private final boolean isNative;
+    private final boolean forceCpu;
+
+    private MemorySegment cublasHandle = MemorySegment.NULL;
+
+    public CUDABackend() {
+        this.forceCpu = Boolean.parseBoolean(System.getProperty(FORCE_CPU_PROPERTY, "false"));
+
+        if (forceCpu) {
+            LOG.info("CUDABackend forced into CPU mode by system properties.");
+            CudaBinding.initializeFallback();
+            this.cudaBinding = CudaBinding.getInstance();
+            this.isNative = false;
+            this.cpuFallback = new CpuBackend();
+            return;
+        }
+
+        boolean loaded = CudaBinding.initialize();
+        if (!loaded) {
+            LOG.warn("Failed to initialize CudaBinding. CUDABackend will operate in CPU fallback mode.");
+            CudaBinding.initializeFallback();
+        }
+
+        this.cudaBinding = CudaBinding.getInstance();
+        this.isNative = cudaBinding.isNativeAvailable();
+        this.cpuFallback = new CpuBackend();
+        
+        if (this.isNative) {
+            this.cublasHandle = cudaBinding.cublasCreate();
+            LOG.infof("Initialized CUDABackend [Device: %s]", cudaBinding.deviceName(0));
+        }
+    }
+
+    private DefaultTensor asDefault(Tensor t) {
+        if (t instanceof DefaultTensor dt) {
+            return dt;
+        }
+        throw new IllegalArgumentException("CUDABackend only supports DefaultTensor");
+    }
+
+    private long byteSize(DType dtype) {
+        return switch (dtype) {
+            case F32, I32 -> 4;
+            case F16, BF16 -> 2;
+            case I8, INT8, Q8_0 -> 1;
+            case Q4_K, Q4_0 -> 0; 
+        };
+    }
+
+    private CpuBuffer allocate(long sizeBytes) {
+        return new CpuBuffer(sizeBytes); // Using CpuBuffer assuming managed memory or host allocation initially
     }
 
     @Override
-    public Tensor sub(Tensor a, Tensor b) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor add(Tensor a, Tensor b) { return cpuFallback.add(a, b); }
 
     @Override
-    public Tensor mul(Tensor a, float scalar) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor sub(Tensor a, Tensor b) { return cpuFallback.sub(a, b); }
 
     @Override
-    public Tensor mul(Tensor a, Tensor b) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor mul(Tensor a, float scalar) { return cpuFallback.mul(a, scalar); }
 
     @Override
-    public Tensor div(Tensor a, float scalar) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor mul(Tensor a, Tensor b) { return cpuFallback.mul(a, b); }
 
     @Override
-    public Tensor div(Tensor a, Tensor b) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor div(Tensor a, float scalar) { return cpuFallback.div(a, scalar); }
 
     @Override
-    public Tensor addScalar(Tensor a, float scalar) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor div(Tensor a, Tensor b) { return cpuFallback.div(a, b); }
+
+    @Override
+    public Tensor addScalar(Tensor a, float scalar) { return cpuFallback.addScalar(a, scalar); }
 
     @Override
     public Tensor matmul(Tensor a, Tensor b) {
-        throw new UnsupportedOperationException(TODO);
+        if (!isNative || cublasHandle.equals(MemorySegment.NULL) || a.dtype() != DType.F32) 
+            return cpuFallback.matmul(a, b);
+        
+        DefaultTensor da = asDefault(a);
+        DefaultTensor db = asDefault(b);
+        
+        int M = (int) a.shape().dim(a.shape().rank() - 2);
+        int K = (int) a.shape().dim(a.shape().rank() - 1);
+        int N = (int) b.shape().dim(b.shape().rank() - 1);
+        
+        Shape shapeC = new Shape(M, N);
+        long sizeBytesA = a.numel() * byteSize(a.dtype());
+        long sizeBytesB = b.numel() * byteSize(b.dtype());
+        long sizeBytesC = shapeC.numel() * byteSize(a.dtype());
+        
+        // 1. Allocate GPU memory
+        MemorySegment d_A = cudaBinding.cudaMalloc(sizeBytesA);
+        MemorySegment d_B = cudaBinding.cudaMalloc(sizeBytesB);
+        MemorySegment d_C = cudaBinding.cudaMalloc(sizeBytesC);
+
+        // 2. Copy host to device
+        cudaBinding.cudaMemcpy(d_A, da.buffer().segment(), sizeBytesA, CudaBinding.cudaMemcpyHostToDevice);
+        cudaBinding.cudaMemcpy(d_B, db.buffer().segment(), sizeBytesB, CudaBinding.cudaMemcpyHostToDevice);
+
+        // 3. cuBLAS sgemm (Note: cuBLAS is column-major, so we compute B^T * A^T to get row-major C)
+        // cublasSgemm(handle, transb, transa, N, M, K, alpha, d_B, N, d_A, K, beta, d_C, N)
+        // Or simple N=false, T=false but swap A and B -> C^T = B^T * A^T
+        int status = cudaBinding.cublasSgemm(cublasHandle, 
+                CudaBinding.CUBLAS_OP_N, CudaBinding.CUBLAS_OP_N, 
+                N, M, K, 
+                1.0f, 
+                d_B, N, 
+                d_A, K, 
+                0.0f, 
+                d_C, N);
+
+        if (status != 0) {
+            cudaBinding.cudaFree(d_A);
+            cudaBinding.cudaFree(d_B);
+            cudaBinding.cudaFree(d_C);
+            return cpuFallback.matmul(a, b);
+        }
+        
+        // 4. Copy device to host
+        CpuBuffer bufferC = allocate(sizeBytesC);
+        cudaBinding.cudaMemcpy(bufferC.segment(), d_C, sizeBytesC, CudaBinding.cudaMemcpyDeviceToHost);
+
+        // 5. Free GPU memory
+        cudaBinding.cudaFree(d_A);
+        cudaBinding.cudaFree(d_B);
+        cudaBinding.cudaFree(d_C);
+
+        return new DefaultTensor(shapeC, a.dtype(), a.device(), bufferC, this);
     }
 
     @Override
-    public Tensor reshape(Tensor a, long... newShape) {
-        throw new UnsupportedOperationException(TODO);
+    public Tensor reshape(Tensor a, long... newShape) { return cpuFallback.reshape(a, newShape); }
+
+    @Override
+    public Tensor attention(Tensor Q, Tensor K, Tensor V) { return cpuFallback.attention(Q, K, V); }
+
+    @Override
+    public Tensor softmax(Tensor a) { return cpuFallback.softmax(a); }
+
+    @Override
+    public Tensor slice(Tensor a, long[] offsets, long[] sizes) { return cpuFallback.slice(a, offsets, sizes); }
+
+    @Override
+    public List<Tensor> split(Tensor a, int axis, int parts) { return cpuFallback.split(a, axis, parts); }
+
+    @Override
+    public Tensor pow(Tensor a, float exponent) { return cpuFallback.pow(a, exponent); }
+
+    @Override
+    public Tensor mean(Tensor a) { return cpuFallback.mean(a); }
+
+    @Override
+    public Tensor abs(Tensor a) { return cpuFallback.abs(a); }
+
+    @Override
+    public Tensor crossEntropy(Tensor pred, Tensor target) { return cpuFallback.crossEntropy(pred, target); }
+
+    @Override
+    public Tensor binaryCrossEntropy(Tensor pred, Tensor target) { return cpuFallback.binaryCrossEntropy(pred, target); }
+
+    @Override
+    public Tensor cast(Tensor a, tech.kayys.aljabr.core.tensor.DType dtype) { return cpuFallback.cast(a, dtype); }
+
+    @Override
+    public Tensor to(Tensor a, tech.kayys.aljabr.core.tensor.DeviceType device) {
+        if (device == DeviceType.CUDA || device == DeviceType.CPU) {
+            return a;
+        }
+        return cpuFallback.to(a, device);
     }
 
     @Override
-    public Tensor slice(Tensor a, long[] offsets, long[] sizes) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor zerosLike(Tensor a) { return cpuFallback.zerosLike(a); }
 
     @Override
-    public List<Tensor> split(Tensor a, int axis, int parts) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor sqrt(Tensor a) { return cpuFallback.sqrt(a); }
 
     @Override
-    public Tensor attention(Tensor Q, Tensor K, Tensor V) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor relu(Tensor a) { return cpuFallback.relu(a); }
 
     @Override
-    public Tensor softmax(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor sigmoid(Tensor a) { return cpuFallback.sigmoid(a); }
 
     @Override
-    public Tensor pow(Tensor a, float exponent) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor tanh(Tensor a) { return cpuFallback.tanh(a); }
 
     @Override
-    public Tensor mean(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor log(Tensor a) { return cpuFallback.log(a); }
 
     @Override
-    public Tensor abs(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor exp(Tensor a) { return cpuFallback.exp(a); }
 
     @Override
-    public Tensor crossEntropy(Tensor pred, Tensor target) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor silu(Tensor a) { return cpuFallback.silu(a); }
 
     @Override
-    public Tensor binaryCrossEntropy(Tensor pred, Tensor target) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor flatten(Tensor a) { return cpuFallback.flatten(a); }
 
     @Override
-    public Tensor cast(Tensor a, DType dtype) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor unsqueeze(Tensor a, int dim) { return cpuFallback.unsqueeze(a, dim); }
 
     @Override
-    public Tensor to(Tensor a, DeviceType device) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor squeeze(Tensor a) { return cpuFallback.squeeze(a); }
 
     @Override
-    public Tensor zerosLike(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor transpose(Tensor a) { return cpuFallback.transpose(a); }
 
     @Override
-    public Tensor sqrt(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor transpose(Tensor a, int d0, int d1) { return cpuFallback.transpose(a, d0, d1); }
 
     @Override
-    public Tensor relu(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor gelu(Tensor a) { return cpuFallback.gelu(a); }
 
     @Override
-    public Tensor sigmoid(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor softmax(Tensor a, int dim) { return cpuFallback.softmax(a, dim); }
 
     @Override
-    public Tensor tanh(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor logSoftmax(Tensor a, int dim) { return cpuFallback.logSoftmax(a, dim); }
 
     @Override
-    public Tensor log(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor mean(Tensor a, int dim, boolean keepDim) { return cpuFallback.mean(a, dim, keepDim); }
 
     @Override
-    public Tensor exp(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor sum(Tensor a) { return cpuFallback.sum(a); }
 
     @Override
-    public Tensor silu(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor sum(Tensor a, int dim, boolean keepDim) { return cpuFallback.sum(a, dim, keepDim); }
 
     @Override
-    public Tensor flatten(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor unsqueeze(Tensor a, int dim) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor squeeze(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor transpose(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor transpose(Tensor a, int dim0, int dim1) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor gelu(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor softmax(Tensor a, int dim) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor logSoftmax(Tensor a, int dim) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor mean(Tensor a, int dim, boolean keepDim) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor sum(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor sum(Tensor a, int dim, boolean keepDim) {
-        throw new UnsupportedOperationException(TODO);
-    }
-
-    @Override
-    public Tensor max(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor max(Tensor a) { return cpuFallback.max(a); }
 
     @Override
     public Tensor layerNorm(Tensor input, long[] normalizedShape, Tensor weight, Tensor bias, float eps) {
-        throw new UnsupportedOperationException(TODO);
+        return cpuFallback.layerNorm(input, normalizedShape, weight, bias, eps);
     }
 
     @Override
-    public Tensor rmsNorm(Tensor input, Tensor weight, float eps) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor rmsNorm(Tensor input, Tensor weight, float eps) { return cpuFallback.rmsNorm(input, weight, eps); }
 
     @Override
     public Tensor batchNorm(Tensor input, Tensor weight, Tensor bias, Tensor runningMean, Tensor runningVar, boolean training, float momentum, float eps) {
-        throw new UnsupportedOperationException(TODO);
+        return cpuFallback.batchNorm(input, weight, bias, runningMean, runningVar, training, momentum, eps);
     }
 
     @Override
     public Tensor conv2d(Tensor input, Tensor weight, Tensor bias, int stride, int padding, int dilation, int groups) {
-        throw new UnsupportedOperationException(TODO);
+        return cpuFallback.conv2d(input, weight, bias, stride, padding, dilation, groups);
     }
 
     @Override
     public Tensor maxPool2d(Tensor input, int kernelSize, int stride, int padding) {
-        throw new UnsupportedOperationException(TODO);
+        return cpuFallback.maxPool2d(input, kernelSize, stride, padding);
     }
 
     @Override
     public Tensor adaptiveAvgPool2d(Tensor input, int outputH, int outputW) {
-        throw new UnsupportedOperationException(TODO);
+        return cpuFallback.adaptiveAvgPool2d(input, outputH, outputW);
     }
 
     @Override
-    public Tensor dropout(Tensor input, float p, boolean training) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor dropout(Tensor input, float p, boolean training) { return cpuFallback.dropout(input, p, training); }
 
     @Override
-    public Tensor embedding(Tensor weight, Tensor input, long paddingIdx) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public Tensor embedding(Tensor weight, Tensor input, long paddingIdx) { return cpuFallback.embedding(weight, input, paddingIdx); }
 
     @Override
-    public long numel(Tensor a) {
-        throw new UnsupportedOperationException(TODO);
-    }
+    public long numel(Tensor a) { return cpuFallback.numel(a); }
 }

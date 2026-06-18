@@ -24,6 +24,9 @@ public final class CpuBuffer implements Buffer {
     }
 
     @Override
+    public Arena arena() { return arena; }
+
+    @Override
     public MemorySegment segment() { return segment; }
 
     @Override

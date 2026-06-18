@@ -1,9 +1,25 @@
 package tech.kayys.aljabr.core.tensor;
 
-
 import tech.kayys.aljabr.core.backend.ComputeBackend;
 
+/**
+ * The core abstraction of the Aljabr framework representing a multi-dimensional array of elements.
+ * 
+ * <p>A {@code Tensor} is immutable with respect to its mathematical properties (shape, data type).
+ * By default, computation operations return a new {@code Tensor} instance unless an explicitly 
+ * mutable operation (like {@code assign} or in-place ops if added) is used.
+ * 
+ * <p>Tensors are backed by a {@link ComputeBackend} and allocate memory according to the rules of 
+ * that backend. For example, a CPU backend allocates off-heap native memory using the Java Foreign 
+ * Function &amp; Memory API (FFM), while a GPU backend allocates memory on the device.
+ */
 public interface Tensor {
+    /**
+     * Evaluates and materializes this Tensor if it is a lazy computation graph node.
+     * For eager tensors, this returns the tensor itself.
+     */
+    Tensor eval();
+
     Shape shape();
 
     DeviceType device();

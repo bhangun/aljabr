@@ -11,19 +11,16 @@ java {
         languageVersion.set(JavaLanguageVersion.of(25))
     }
 }
-
 sourceSets {
-    named("main") {
+    main {
         java {
             setSrcDirs(listOf("src/main/java"))
-            // Keep Gradle on the maintained FFM binding surface first.
-            // The older MetalComputeBackend adapter layer still targets a stale
-            // tensor SPI and should migrate separately from the CLI path.
             include("tech/kayys/aljabr/backend/metal/binding/MetalBinding.java")
             include("tech/kayys/aljabr/backend/metal/binding/MetalCpuFallback.java")
             include("tech/kayys/aljabr/backend/metal/binding/MetalFlashAttentionBinding.java")
             include("tech/kayys/aljabr/backend/metal/binding/MetalFlashAttentionCpuFallback.java")
             include("tech/kayys/aljabr/backend/metal/binding/MetalLibraryDiscovery.java")
+            include("tech/kayys/aljabr/backend/metal/MetalComputeBackend.java")
         }
         resources {
             srcDir("src/main/cpp/resources")
@@ -31,8 +28,12 @@ sourceSets {
     }
 }
 
+
 dependencies {
+    implementation(project(":core:aljabr-tensor"))
+    implementation(project(":backend:cpu:aljabr-backend-cpu"))
     implementation("org.jboss.logging:jboss-logging:3.6.1.Final")
+    implementation("jakarta.enterprise:jakarta.enterprise.cdi-api:4.1.0")
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

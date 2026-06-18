@@ -45,6 +45,8 @@ typedef struct {
     __strong id<MTLComputePipelineState> gelu_ffn;
     __strong id<MTLComputePipelineState> rmsnorm;
     __strong id<MTLComputePipelineState> rmsnorm_rows;
+    __strong id<MTLComputePipelineState> softmax;
+    __strong id<MTLComputePipelineState> softmax_rows;
     __strong id<MTLComputePipelineState> decode_attention;
 } AljabrMetalPipelines;
 

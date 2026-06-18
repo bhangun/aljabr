@@ -128,6 +128,59 @@ int aljabr_metal_rmsnorm_rows(void* out, const void* x, const void* weight,
     }
 }
 
+int aljabr_metal_softmax(void* out, const void* x, int N) {
+    AljabrMetalPipelines* pipelines = aljabr_metal_pipelines();
+    if (!g_initialized || N <= 0) return -5;
+    if (!g_elementwise_enabled || pipelines->softmax == nil) return -5;
+
+    @autoreleasepool {
+        id<MTLBuffer> bufOut = wrap_ptr(out, (size_t)N * sizeof(float));
+        id<MTLBuffer> bufX = wrap_ptr((void*)x, (size_t)N * sizeof(float));
+        if (bufOut == nil || bufX == nil) return -5;
+
+        unsigned int n = (unsigned int)N;
+        id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:pipelines->softmax];
+        [enc setBuffer:bufOut offset:0 atIndex:0];
+        [enc setBuffer:bufX offset:0 atIndex:1];
+        [enc setBytes:&n length:sizeof(n) atIndex:2];
+        [enc dispatchThreadgroups:MTLSizeMake(1, 1, 1)
+             threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+        [enc endEncoding];
+        [cmd commit];
+        [cmd waitUntilCompleted];
+        return cmd.error == nil ? 0 : -5;
+    }
+}
+
+int aljabr_metal_softmax_rows(void* out, const void* x, int rows, int N) {
+    AljabrMetalPipelines* pipelines = aljabr_metal_pipelines();
+    if (rows <= 0 || N <= 0) return 0;
+    if (!g_initialized || !g_elementwise_enabled || pipelines->softmax_rows == nil) return -5;
+
+    @autoreleasepool {
+        size_t elements = (size_t)rows * (size_t)N;
+        id<MTLBuffer> bufOut = wrap_ptr(out, elements * sizeof(float));
+        id<MTLBuffer> bufX = wrap_ptr((void*)x, elements * sizeof(float));
+        if (bufOut == nil || bufX == nil) return -5;
+
+        unsigned int n = (unsigned int)N;
+        id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:pipelines->softmax_rows];
+        [enc setBuffer:bufOut offset:0 atIndex:0];
+        [enc setBuffer:bufX offset:0 atIndex:1];
+        [enc setBytes:&n length:sizeof(n) atIndex:2];
+        [enc dispatchThreadgroups:MTLSizeMake((NSUInteger)rows, 1, 1)
+             threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+        [enc endEncoding];
+        [cmd commit];
+        [cmd waitUntilCompleted];
+        return cmd.error == nil ? 0 : -5;
+    }
+}
+
 int aljabr_metal_silu_ffn(void* out, const void* gate, const void* up, int N) {
     AljabrMetalPipelines* pipelines = aljabr_metal_pipelines();
     if (!g_initialized || N <= 0) return aljabr_metal_cpu_silu_ffn(out, gate, up, N);

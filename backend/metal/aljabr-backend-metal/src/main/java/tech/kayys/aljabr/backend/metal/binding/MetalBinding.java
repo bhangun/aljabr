@@ -84,6 +84,7 @@ public class MetalBinding {
     private static final String FN_ATTENTION_GQA_WINDOWED = "aljabr_metal_attention_gqa_windowed";
     private static final String FN_RMSNORM = "aljabr_metal_rmsnorm";
     private static final String FN_RMSNORM_ROWS = "aljabr_metal_rmsnorm_rows";
+    private static final String FN_SOFTMAX = "aljabr_metal_softmax";
     private static final String FN_SILU_FFN = "aljabr_metal_silu_ffn";
     private static final String FN_GELU_FFN = "aljabr_metal_gelu_ffn";
     private static final String FN_SET_MPS_MATVEC_ENABLED = "aljabr_metal_set_mps_matvec_enabled";
@@ -963,8 +964,23 @@ public class MetalBinding {
      * 
      * @return 0 on success
      */
-    public int siluFfn(MemorySegment out, MemorySegment gate,
-            MemorySegment up, int N) {
+    public int softmax(MemorySegment out, MemorySegment x, int N) {
+        if (!nativeAvailable || !handles.containsKey(FN_SOFTMAX))
+            throw new UnsupportedOperationException("Metal softmax not supported in CPU fallback");
+        return (int) invoke(FN_SOFTMAX, out, x, N);
+    }
+
+    public int softmaxRows(MemorySegment out, MemorySegment x, int rows, int N) {
+        if (rows <= 0 || N <= 0) {
+            return 0;
+        }
+        if (!nativeAvailable || !handles.containsKey(FN_SOFTMAX + "_rows")) {
+            throw new UnsupportedOperationException("Metal softmaxRows not supported in CPU fallback");
+        }
+        return (int) invoke(FN_SOFTMAX + "_rows", out, x, rows, N);
+    }
+
+    public int siluFfn(MemorySegment out, MemorySegment gate, MemorySegment up, int N) {
         if (!nativeAvailable || !handles.containsKey(FN_SILU_FFN))
             return MetalCpuFallback.siluFfn(out, gate, up, N);
         return (int) invoke(FN_SILU_FFN, out, gate, up, N);
@@ -1271,6 +1287,12 @@ public class MetalBinding {
                 ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
                 ValueLayout.JAVA_INT, ValueLayout.JAVA_FLOAT, ValueLayout.JAVA_INT,
                 ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_FLOAT));
+
+        bind(FN_SOFTMAX, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+
+        bind(FN_SOFTMAX + "_rows", FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
 
         // int aljabr_metal_rmsnorm(out, x, weight, N, eps, add_one)
         bind(FN_RMSNORM, FunctionDescriptor.of(ValueLayout.JAVA_INT,

@@ -13,6 +13,12 @@ import java.util.List;
  *
  * <p>All methods receive fully-allocated tensors and return a new tensor
  * backed by memory appropriate for the backend (off-heap for CPU/GPU).
+ * Operations are strictly mathematical; they do not modify the input {@code Tensor}
+ * instances.
+ * 
+ * <p>Performance note: Backends are expected to leverage SIMD or GPU acceleration 
+ * where possible, keeping the heavy lifting completely off the Java heap to minimize 
+ * GC pressure and maximize throughput.
  */
 public interface ComputeBackend {
 

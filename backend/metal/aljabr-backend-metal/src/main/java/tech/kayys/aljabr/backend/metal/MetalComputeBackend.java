@@ -1,73 +1,30 @@
-package tech.kayys.aljabr.metal;
+package tech.kayys.aljabr.backend.metal;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.jboss.logging.Logger;
 import tech.kayys.aljabr.metal.binding.MetalBinding;
-import tech.kayys.aljabr.spi.tensor.ComputeBackend;
-import tech.kayys.aljabr.spi.tensor.CpuBackend;
+import tech.kayys.aljabr.core.backend.ComputeBackend;
+import tech.kayys.aljabr.core.tensor.*;
+import tech.kayys.aljabr.core.memory.CpuBuffer;
+import tech.kayys.aljabr.backend.cpu.CpuBackend;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.file.Path;
-import jakarta.enterprise.context.ApplicationScoped;
+import java.util.List;
 
 /**
  * Metal hardware-accelerated computation backend.
- *
- * <p>This adapter implements the generic {@link ComputeBackend} SPI and delegates
- * intensive Math operations to Apple's Metal Performance Shaders (MPS) via JNI/FFM
- * using {@link MetalBinding}. 
- *
- * <p>For mathematical operations not supported natively by the Metal bridge yet (like
- * exp, log, sigmoid), it gracefully falls back to the {@link CpuBackend}.
  */
-@ApplicationScoped
-public class MetalComputeBackend implements ComputeBackend, AdvancedMetalOps {
+public class MetalComputeBackend implements ComputeBackend {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MetalComputeBackend.class);
+    private static final Logger LOG = Logger.getLogger(MetalComputeBackend.class);
     private static final String FORCE_CPU_PROPERTY = "aljabr.kernel.force.cpu";
-    private static final String PLATFORM_PROPERTY = "aljabr.kernel.platform";
 
     private final MetalBinding metalBinding;
     private final CpuBackend cpuFallback;
     private final boolean isNative;
     private final boolean forceCpu;
 
-    /**
-     * Reusable thread-local memory buffers to prevent FFM allocation on every operations.
-     * Memory is only expanded, never shrunk, during sequential inferences.
-     */
-    private static class ScratchBuffers implements AutoCloseable {
-        private Arena arena;
-        public MemorySegment memA;
-        public MemorySegment memB;
-        public MemorySegment memC;
-        
-        public ScratchBuffers(long sizeA, long sizeB, long sizeC) {
-            this.arena = Arena.ofConfined();
-            // Using 4096-byte (page) alignment for GPU scratch safety
-            this.memA = arena.allocate(sizeA, 4096);
-            this.memB = arena.allocate(sizeB, 4096);
-            this.memC = arena.allocate(sizeC, 4096);
-        }
-
-        @Override
-        public void close() {
-            if (arena != null) {
-                try {
-                    arena.close();
-                } catch (Exception e) {
-                    LOG.error("Failed to close Memory Arena", e);
-                }
-            }
-        }
-    }
-
-    private final ThreadLocal<ScratchBuffers> threadLocalBuffers = new ThreadLocal<>();
-
     public MetalComputeBackend() {
-        this.forceCpu = isCpuForced();
+        this.forceCpu = Boolean.parseBoolean(System.getProperty(FORCE_CPU_PROPERTY, "false"));
 
         if (forceCpu) {
             LOG.info("MetalComputeBackend forced into CPU mode by system properties.");
@@ -78,459 +35,316 @@ public class MetalComputeBackend implements ComputeBackend, AdvancedMetalOps {
             return;
         }
 
-        // Attempt to load the dylib using robust discovery (standard paths, java.library.path, etc.)
         boolean loaded = MetalBinding.initialize();
-        
         if (!loaded) {
-            LOG.warn("Failed to initialize libaljabr_metal.dylib. MetalComputeBackend will operate in full CPU fallback mode.");
+            LOG.warn("Failed to initialize MetalBinding. MetalComputeBackend will operate in CPU fallback mode.");
             MetalBinding.initializeFallback();
         }
 
         this.metalBinding = MetalBinding.getInstance();
         this.metalBinding.init();
         this.isNative = metalBinding.isRuntimeActive();
-
-        // Fallback for ops not implemented in Metal (like log, exp, pow)
         this.cpuFallback = new CpuBackend();
         
-        LOG.info("Initialized MetalComputeBackend [Device: {}, Unified Memory: {}]", 
+        LOG.infof("Initialized MetalComputeBackend [Device: %s, Unified Memory: %s]", 
                 metalBinding.deviceName(), metalBinding.isUnifiedMemory());
     }
 
-    private boolean isCpuForced() {
-        if (Boolean.parseBoolean(System.getProperty(FORCE_CPU_PROPERTY, "false"))) {
-            return true;
+    private DefaultTensor asDefault(Tensor t) {
+        if (t instanceof DefaultTensor dt) {
+            return dt;
         }
-        return "cpu".equalsIgnoreCase(System.getProperty(PLATFORM_PROPERTY, ""));
+        throw new IllegalArgumentException("MetalComputeBackend only supports DefaultTensor");
     }
 
-    private boolean canUseNative() {
-        return isNative && !isCpuForced();
+    private long byteSize(DType dtype) {
+        return switch (dtype) {
+            case F32, I32 -> 4;
+            case F16, BF16 -> 2;
+            case I8, INT8, Q8_0 -> 1;
+            case Q4_K, Q4_0 -> 0; 
+        };
     }
 
-    private float[] toFloatArray(MemorySegment segment, long elements) {
-        return segment.asSlice(0, elements * 4L).toArray(ValueLayout.JAVA_FLOAT);
-    }
-
-    private void copyFloatArray(MemorySegment out, float[] values) {
-        MemorySegment.copy(MemorySegment.ofArray(values), 0, out, 0, (long) values.length * 4L);
-    }
-
-    private float[] transpose2dRowMajor(float[] src, int rows, int cols) {
-        float[] out = new float[src.length];
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                out[c * rows + r] = src[r * cols + c];
-            }
-        }
-        return out;
-    }
-
-    private ScratchBuffers ensureBuffers(long reqA, long reqB, long reqC) {
-        ScratchBuffers buffers = threadLocalBuffers.get();
-        if (buffers == null || buffers.memA.byteSize() < reqA || buffers.memB.byteSize() < reqB || buffers.memC.byteSize() < reqC) {
-            if (buffers != null) buffers.close();
-            long allocA = Math.max(reqA + (reqA / 5), 4L * 1024 * 1024);
-            long allocB = Math.max(reqB + (reqB / 5), 4L * 1024 * 1024); 
-            long allocC = Math.max(reqC + (reqC / 5), 4L * 1024 * 1024);
-            buffers = new ScratchBuffers(allocA, allocB, allocC);
-            threadLocalBuffers.set(buffers);
-            LOG.debug("Reallocated Metal scratch buffers [A:{} B:{} C:{}] bytes", allocA, allocB, allocC);
-        }
-        return buffers;
-    }
-
-    private void copyToMem(float[] a, float[] b, MemorySegment memA, MemorySegment memB) {
-        if (a != null) {
-            MemorySegment heapA = MemorySegment.ofArray(a);
-            MemorySegment.copy(heapA, 0, memA, 0, heapA.byteSize());
-        }
-        if (b != null) {
-            MemorySegment heapB = MemorySegment.ofArray(b);
-            MemorySegment.copy(heapB, 0, memB, 0, heapB.byteSize());
-        }
-    }
-
-    private float[] copyFromMem(MemorySegment mem, int length) {
-        float[] result = new float[length];
-        MemorySegment heapR = MemorySegment.ofArray(result);
-        MemorySegment.copy(mem, 0, heapR, 0, (long) length * 4L);
-        return result;
+    private CpuBuffer allocate(long sizeBytes) {
+        return new CpuBuffer(sizeBytes);
     }
 
     @Override
-    public float[] matmul(float[] a, long[] shapeA, float[] b, long[] shapeB) {
-        if (!canUseNative()) {
-            return cpuFallback.matmul(a, shapeA, b, shapeB);
-        }
-        int M = (int) shapeA[shapeA.length - 2];
-        int K = (int) shapeA[shapeA.length - 1];
-        int N = (int) shapeB[shapeB.length - 1];
-
-        int batchA = 1, batchB = 1;
-        for (int i = 0; i < shapeA.length - 2; i++) batchA *= (int) shapeA[i];
-        for (int i = 0; i < shapeB.length - 2; i++) batchB *= (int) shapeB[i];
-        int batch = Math.max(batchA, batchB);
-        int outSize = batch * M * N;
-
-        ScratchBuffers buffers = ensureBuffers((long)a.length * 4L, (long)b.length * 4L, (long)outSize * 4L);
-        copyToMem(a, b, buffers.memA, buffers.memB);
-
-        for (int bIdx = 0; bIdx < batch; bIdx++) {
-            long offA = Math.max(0L, (long) (bIdx % batchA) * M * K * 4L);
-            long offB = Math.max(0L, (long) (bIdx % batchB) * K * N * 4L);
-            long offC = Math.max(0L, (long) bIdx * M * N * 4L);
-
-            MemorySegment sliceA = buffers.memA.asSlice(offA, Math.min(buffers.memA.byteSize() - offA, (long) M * K * 4L));
-            MemorySegment sliceB = buffers.memB.asSlice(offB, Math.min(buffers.memB.byteSize() - offB, (long) K * N * 4L));
-            MemorySegment sliceC = buffers.memC.asSlice(offC, Math.min(buffers.memC.byteSize() - offC, (long) M * N * 4L));
-
-            try {
-                metalBinding.matmul(sliceC, sliceA, sliceB, M, K, N, 1.0f, 0.0f);
-            } catch (IllegalStateException | UnsupportedOperationException e) {
-                LOG.debug("Falling back from Metal matmul(float[]) to CPU: {}", e.getMessage());
-                return cpuFallback.matmul(a, shapeA, b, shapeB);
-            }
-        }
-
-        return copyFromMem(buffers.memC, outSize);
-    }
+    public Tensor add(Tensor a, Tensor b) { return cpuFallback.add(a, b); }
 
     @Override
-    public void matmul(MemorySegment a, long[] shapeA, MemorySegment b, long[] shapeB, MemorySegment out) {
-        long elementsA = 1;
-        for (long dim : shapeA) elementsA *= dim;
-        long elementsB = 1;
-        for (long dim : shapeB) elementsB *= dim;
-        if (!canUseNative()) {
-            float[] result = cpuFallback.matmul(
-                    toFloatArray(a, elementsA), shapeA,
-                    toFloatArray(b, elementsB), shapeB);
-            copyFloatArray(out, result);
-            return;
-        }
-        int M = (int) shapeA[shapeA.length - 2];
-        int K = (int) shapeA[shapeA.length - 1];
-        int N = (int) shapeB[shapeB.length - 1];
-
-        int batchA = 1, batchB = 1;
-        for (int i = 0; i < shapeA.length - 2; i++) batchA *= (int) shapeA[i];
-        for (int i = 0; i < shapeB.length - 2; i++) batchB *= (int) shapeB[i];
-        int batch = Math.max(batchA, batchB);
-
-        for (int bIdx = 0; bIdx < batch; bIdx++) {
-            long offA = Math.max(0L, (long) (bIdx % batchA) * M * K * 4L);
-            long offB = Math.max(0L, (long) (bIdx % batchB) * K * N * 4L);
-            long offC = Math.max(0L, (long) bIdx * M * N * 4L);
-
-            MemorySegment sliceA = a.asSlice(offA, Math.min(a.byteSize() - offA, (long) M * K * 4L));
-            MemorySegment sliceB = b.asSlice(offB, Math.min(b.byteSize() - offB, (long) K * N * 4L));
-            MemorySegment sliceC = out.asSlice(offC, Math.min(out.byteSize() - offC, (long) M * N * 4L));
-
-            try {
-                metalBinding.matmul(sliceC, sliceA, sliceB, M, K, N, 1.0f, 0.0f);
-            } catch (IllegalStateException | UnsupportedOperationException e) {
-                LOG.debug("Falling back from Metal matmul(MemorySegment) to CPU: {}", e.getMessage());
-                float[] result = cpuFallback.matmul(
-                        toFloatArray(a, elementsA), shapeA,
-                        toFloatArray(b, elementsB), shapeB);
-                copyFloatArray(out, result);
-                return;
-            }
-        }
-    }
-
-    public void matmulTransposedRight(MemorySegment a, long[] shapeA, MemorySegment b, long[] shapeB, MemorySegment out) {
-        long elementsA = 1;
-        for (long dim : shapeA) elementsA *= dim;
-        long elementsB = 1;
-        for (long dim : shapeB) elementsB *= dim;
-        if (!canUseNative()) {
-            float[] bTransposed = transpose2dRowMajor(
-                    toFloatArray(b, elementsB),
-                    (int) shapeB[shapeB.length - 2],
-                    (int) shapeB[shapeB.length - 1]);
-            float[] result = cpuFallback.matmul(
-                    toFloatArray(a, elementsA), shapeA,
-                    bTransposed, new long[]{shapeB[1], shapeB[0]});
-            copyFloatArray(out, result);
-            return;
-        }
-
-        int M = (int) shapeA[shapeA.length - 2];
-        int K = (int) shapeA[shapeA.length - 1];
-        int N = (int) shapeB[shapeB.length - 2];
-        try {
-            metalBinding.matmulTransposedRight(out, a, b, M, K, N, 1.0f, 0.0f);
-        } catch (IllegalStateException | UnsupportedOperationException e) {
-            LOG.debug("Falling back from Metal matmulTransposedRight to CPU: {}", e.getMessage());
-            float[] bTransposed = transpose2dRowMajor(
-                    toFloatArray(b, elementsB),
-                    (int) shapeB[shapeB.length - 2],
-                    (int) shapeB[shapeB.length - 1]);
-            float[] result = cpuFallback.matmul(
-                    toFloatArray(a, elementsA), shapeA,
-                    bTransposed, new long[]{shapeB[1], shapeB[0]});
-            copyFloatArray(out, result);
-        }
-    }
-
-    public void matmulTransposedRightHalf(MemorySegment a, long[] shapeA, MemorySegment b, long[] shapeB, MemorySegment out, boolean isBf16) {
-        if (!canUseNative()) {
-            throw new UnsupportedOperationException("Metal matmulTransposedRightHalf not supported in CPU fallback");
-        }
-        int M = (int) shapeA[shapeA.length - 2];
-        int K = (int) shapeA[shapeA.length - 1];
-        int N = (int) shapeB[shapeB.length - 2];
-        int status = metalBinding.matmulTransposedRightHalf(out, a, b, M, K, N, 1.0f, 0.0f, isBf16);
-        if (status == -2) {
-            throw new UnsupportedOperationException("Hardware does not support this half-precision format (status -2)");
-        } else if (status != 0) {
-            throw new RuntimeException("Metal matmulTransposedRightHalf failed with status " + status);
-        }
-    }
+    public Tensor sub(Tensor a, Tensor b) { return cpuFallback.sub(a, b); }
 
     @Override
-    public float[] add(float[] a, float[] b, long[] shape) {
-        if (!canUseNative()) {
-            return cpuFallback.add(a, b, shape);
-        }
-        int N = a.length;
-        ScratchBuffers buffers = ensureBuffers((long)N * 4L, (long)N * 4L, (long)N * 4L);
-        copyToMem(a, b, buffers.memA, buffers.memB);
-        try {
-            metalBinding.add(buffers.memC, buffers.memA, buffers.memB, N);
-        } catch (IllegalStateException | UnsupportedOperationException e) {
-            LOG.debug("Falling back from Metal add(float[]) to CPU: {}", e.getMessage());
-            return cpuFallback.add(a, b, shape);
-        }
-        return copyFromMem(buffers.memC, N);
-    }
+    public Tensor mul(Tensor a, float scalar) { return cpuFallback.mul(a, scalar); }
 
     @Override
-    public void add(MemorySegment a, MemorySegment b, MemorySegment out, long[] shape) {
-        long n = 1;
-        for (long s : shape) n *= s;
-        if (!canUseNative()) {
-            float[] result = cpuFallback.add(toFloatArray(a, n), toFloatArray(b, n), shape);
-            copyFloatArray(out, result);
-            return;
-        }
-        try {
-            metalBinding.add(out, a, b, (int)n);
-        } catch (IllegalStateException | UnsupportedOperationException e) {
-            LOG.debug("Falling back from Metal add(MemorySegment) to CPU: {}", e.getMessage());
-            float[] result = cpuFallback.add(toFloatArray(a, n), toFloatArray(b, n), shape);
-            copyFloatArray(out, result);
-        }
-    }
+    public Tensor mul(Tensor a, Tensor b) { return cpuFallback.mul(a, b); }
 
     @Override
-    public float[] sub(float[] a, float[] b, long[] shape) {
-        if (!canUseNative()) return cpuFallback.sub(a, b, shape);
-        int n = a.length; ScratchBuffers bfr = ensureBuffers(n * 4L, n * 4L, n * 4L);
-        copyToMem(a, b, bfr.memA, bfr.memB);
-        if (metalBinding.sub(bfr.memC, bfr.memA, bfr.memB, n) != 0) return cpuFallback.sub(a, b, shape);
-        return copyFromMem(bfr.memC, n);
-    }
+    public Tensor div(Tensor a, float scalar) { return cpuFallback.div(a, scalar); }
 
     @Override
-    public float[] mul(float[] a, float[] b, long[] shape) {
-        if (!canUseNative()) return cpuFallback.mul(a, b, shape);
-        int n = a.length; ScratchBuffers bfr = ensureBuffers(n * 4L, n * 4L, n * 4L);
-        copyToMem(a, b, bfr.memA, bfr.memB);
-        if (metalBinding.mul(bfr.memC, bfr.memA, bfr.memB, n) != 0) return cpuFallback.mul(a, b, shape);
-        return copyFromMem(bfr.memC, n);
-    }
+    public Tensor div(Tensor a, Tensor b) { return cpuFallback.div(a, b); }
 
     @Override
-    public float[] div(float[] a, float[] b, long[] shape) {
-        if (!canUseNative()) return cpuFallback.div(a, b, shape);
-        int n = a.length; ScratchBuffers bfr = ensureBuffers(n * 4L, n * 4L, n * 4L);
-        copyToMem(a, b, bfr.memA, bfr.memB);
-        if (metalBinding.div(bfr.memC, bfr.memA, bfr.memB, n) != 0) return cpuFallback.div(a, b, shape);
-        return copyFromMem(bfr.memC, n);
-    }
+    public Tensor addScalar(Tensor a, float scalar) { return cpuFallback.addScalar(a, scalar); }
 
     @Override
-    public float[] relu(float[] data, long[] shape) {
-        if (!canUseNative()) return cpuFallback.relu(data, shape);
-        int n = data.length; ScratchBuffers bfr = ensureBuffers(n * 4L, 0, n * 4L);
-        copyToMem(data, null, bfr.memA, null);
-        if (metalBinding.relu(bfr.memC, bfr.memA, n) != 0) return cpuFallback.relu(data, shape);
-        return copyFromMem(bfr.memC, n);
-    }
-
-    @Override
-    public float[] sigmoid(float[] data, long[] shape) {
-        if (!canUseNative()) return cpuFallback.sigmoid(data, shape);
-        int n = data.length; ScratchBuffers bfr = ensureBuffers(n * 4L, 0, n * 4L);
-        copyToMem(data, null, bfr.memA, null);
-        if (metalBinding.sigmoid(bfr.memC, bfr.memA, n) != 0) return cpuFallback.sigmoid(data, shape);
-        return copyFromMem(bfr.memC, n);
-    }
-
-    @Override
-    public float[] tanh(float[] data, long[] shape) {
-        if (!canUseNative()) return cpuFallback.tanh(data, shape);
-        int n = data.length; ScratchBuffers bfr = ensureBuffers(n * 4L, 0, n * 4L);
-        copyToMem(data, null, bfr.memA, null);
-        if (metalBinding.tanh(bfr.memC, bfr.memA, n) != 0) return cpuFallback.tanh(data, shape);
-        return copyFromMem(bfr.memC, n);
-    }
-
-    @Override
-    public float[] exp(float[] data, long[] shape) {
-        if (!canUseNative()) return cpuFallback.exp(data, shape);
-        int n = data.length; ScratchBuffers bfr = ensureBuffers(n * 4L, 0, n * 4L);
-        copyToMem(data, null, bfr.memA, null);
-        if (metalBinding.exp(bfr.memC, bfr.memA, n) != 0) return cpuFallback.exp(data, shape);
-        return copyFromMem(bfr.memC, n);
-    }
-
-    @Override
-    public float[] log(float[] data, long[] shape) {
-        if (!canUseNative()) return cpuFallback.log(data, shape);
-        int n = data.length; ScratchBuffers bfr = ensureBuffers(n * 4L, 0, n * 4L);
-        copyToMem(data, null, bfr.memA, null);
-        if (metalBinding.log(bfr.memC, bfr.memA, n) != 0) return cpuFallback.log(data, shape);
-        return copyFromMem(bfr.memC, n);
-    }
-
-    @Override
-    public float[] sum(float[] data, long[] shape) {
-        if (!canUseNative()) return cpuFallback.sum(data, shape);
-        int n = data.length; ScratchBuffers bfr = ensureBuffers(n * 4L, 0, 4L);
-        copyToMem(data, null, bfr.memA, null);
-        if (metalBinding.sum(bfr.memC, bfr.memA, n) != 0) return cpuFallback.sum(data, shape);
-        return copyFromMem(bfr.memC, 1);
-    }
-
-    @Override
-    public float[] mean(float[] data, long[] shape) {
-        if (!canUseNative()) return cpuFallback.mean(data, shape);
-        int n = data.length; ScratchBuffers bfr = ensureBuffers(n * 4L, 0, 4L);
-        copyToMem(data, null, bfr.memA, null);
-        if (metalBinding.mean(bfr.memC, bfr.memA, n) != 0) return cpuFallback.mean(data, shape);
-        return copyFromMem(bfr.memC, 1);
-    }
-
-    @Override
-    public float[] transpose2d(float[] data, long rows, long cols) {
-        if (!canUseNative()) return cpuFallback.transpose2d(data, rows, cols);
-        int n = data.length; ScratchBuffers bfr = ensureBuffers(n * 4L, 0, n * 4L);
-        copyToMem(data, null, bfr.memA, null);
-        if (metalBinding.transpose2d(bfr.memC, bfr.memA, (int)rows, (int)cols) != 0) return cpuFallback.transpose2d(data, rows, cols);
-        return copyFromMem(bfr.memC, n);
-    }
-
-    @Override
-    public float[] pow(float[] data, long[] shape, float p) {
-        if (!canUseNative()) return cpuFallback.pow(data, shape, p);
-        int n = data.length; ScratchBuffers bfr = ensureBuffers(n * 4L, 0, n * 4L);
-        copyToMem(data, null, bfr.memA, null);
-        if (metalBinding.pow(bfr.memC, bfr.memA, n, p) != 0) return cpuFallback.pow(data, shape, p);
-        return copyFromMem(bfr.memC, n);
-    }
-
-    // ── Advanced Fused Operations (AdvancedMetalOps) ──────────────────────
-
-    @Override
-    public void rmsNorm(float[] out, float[] x, float[] weight, int n, float eps, boolean addOne) {
-        if (!canUseNative()) {
-            // Usually falling back isn't fully 1:1 if a pure CPU node didn't cast to AdvancedMetalOps.
-            // But if triggered, we simulate simple iteration.
-            float ss = 0.f; for(int i=0; i<n; i++) ss += x[i]*x[i];
-            float rms = (float) Math.sqrt(ss / n + eps);
-            for(int i=0; i<n; i++) {
-                float w = weight[i];
-                if (addOne) w += 1.0f;
-                out[i] = x[i] / rms * w;
-            }
-            return;
-        }
-
-        ScratchBuffers bfr = ensureBuffers(n * 4L, n * 4L, n * 4L);
-        copyToMem(x, weight, bfr.memA, bfr.memB);
-        metalBinding.rmsNorm(bfr.memC, bfr.memA, bfr.memB, n, eps, addOne);
-        // In-place or output
-        MemorySegment heapOut = MemorySegment.ofArray(out);
-        MemorySegment.copy(bfr.memC, 0, heapOut, 0, (long) n * 4L);
-    }
-
-    @Override
-    public void rmsNorm(MemorySegment out, MemorySegment x, MemorySegment weight, int n, float eps, boolean addOne) {
-        if (!canUseNative()) {
-            float[] xArr = x.toArray(ValueLayout.JAVA_FLOAT);
-            float[] wArr = weight.toArray(ValueLayout.JAVA_FLOAT);
-            float[] oArr = new float[n];
-            rmsNorm(oArr, xArr, wArr, n, eps, addOne);
-            out.copyFrom(MemorySegment.ofArray(oArr));
-            return;
-        }
-        metalBinding.rmsNorm(out, x, weight, n, eps, addOne);
-    }
-
-    @Override
-    public void siluFfn(float[] out, float[] gate, float[] up, int n) {
-        if (!canUseNative()) {
-            for(int i=0; i<n; i++) {
-                float g = gate[i];
-                out[i] = (float) ((g / (1.0f + Math.exp(-g))) * up[i]);
-            }
-            return;
-        }
-
-        ScratchBuffers bfr = ensureBuffers(n * 4L, n * 4L, n * 4L);
-        copyToMem(gate, up, bfr.memA, bfr.memB);
-        metalBinding.siluFfn(bfr.memC, bfr.memA, bfr.memB, n);
-        MemorySegment heapOut = MemorySegment.ofArray(out);
-        MemorySegment.copy(bfr.memC, 0, heapOut, 0, (long) n * 4L);
-    }
-
-    @Override
-    public void siluFfn(MemorySegment out, MemorySegment gate, MemorySegment up, int n) {
-        if (!canUseNative()) {
-            float[] gArr = gate.toArray(ValueLayout.JAVA_FLOAT);
-            float[] uArr = up.toArray(ValueLayout.JAVA_FLOAT);
-            float[] oArr = new float[n];
-            siluFfn(oArr, gArr, uArr, n);
-            out.copyFrom(MemorySegment.ofArray(oArr));
-            return;
-        }
-        metalBinding.siluFfn(out, gate, up, n);
-    }
-
-    @Override
-    public void pagedAttention(
-            MemorySegment out, 
-            MemorySegment q,
-            MemorySegment kCache, 
-            MemorySegment vCache,
-            MemorySegment blockTable, 
-            MemorySegment contextLens,
-            int b, int t, int h, int d,
-            int blockSize, int maxBlocks,
-            float scale, boolean isCausal, float softCap) {
+    public Tensor matmul(Tensor a, Tensor b) {
+        if (!isNative) return cpuFallback.matmul(a, b);
         
-        if (!canUseNative()) {
-            throw new UnsupportedOperationException("CPU Fallback for Paged Attention MemorySegments is not supported directly in the Metal adapter. Caller must handle.");
+        DefaultTensor da = asDefault(a);
+        DefaultTensor db = asDefault(b);
+        
+        int M = (int) a.shape().dim(a.shape().rank() - 2);
+        int K = (int) a.shape().dim(a.shape().rank() - 1);
+        int N = (int) b.shape().dim(b.shape().rank() - 1);
+        
+        Shape shapeC = new Shape(M, N);
+        long sizeBytes = shapeC.numel() * byteSize(a.dtype());
+        
+        CpuBuffer bufferC = allocate(sizeBytes);
+        int status = metalBinding.matmul(bufferC.segment(), da.buffer().segment(), db.buffer().segment(), M, K, N, 1.0f, 0.0f);
+        if (status != 0) {
+            return cpuFallback.matmul(a, b);
+        }
+        
+        return new DefaultTensor(shapeC, a.dtype(), a.device(), bufferC, this);
+    }
+
+    @Override
+    public Tensor reshape(Tensor a, long... newShape) { return cpuFallback.reshape(a, newShape); }
+
+    @Override
+    public Tensor attention(Tensor Q, Tensor K, Tensor V) {
+        if (!isNative) return cpuFallback.attention(Q, K, V);
+        
+        DefaultTensor dQ = asDefault(Q);
+        DefaultTensor dK = asDefault(K);
+        DefaultTensor dV = asDefault(V);
+
+        int B = (int) Q.shape().dim(0);
+        int T = (int) Q.shape().dim(1);
+        int H = (int) Q.shape().dim(2);
+        int D = (int) Q.shape().dim(3);
+
+        Shape shapeOut = Q.shape();
+        long sizeBytes = shapeOut.numel() * byteSize(Q.dtype());
+        CpuBuffer bufferOut = allocate(sizeBytes);
+
+        MemorySegment empty = MemorySegment.NULL;
+        int status = metalBinding.attention(bufferOut.segment(), dQ.buffer().segment(), dK.buffer().segment(), dV.buffer().segment(),
+                empty, empty, B, T, H, D, 16, 1024, (float)(1.0/Math.sqrt(D)), 1, 0.0f);
+
+        if (status != 0) {
+            return cpuFallback.attention(Q, K, V);
         }
 
-        metalBinding.attention(
-                out, q, kCache, vCache, blockTable, contextLens,
-                b, t, h, d, blockSize, maxBlocks, scale, isCausal ? 1 : 0, softCap
-        );
+        return new DefaultTensor(shapeOut, Q.dtype(), Q.device(), bufferOut, this);
     }
 
     @Override
-    public String deviceName() {
-        return canUseNative() ? metalBinding.deviceName() : "CPU (Metal Fallback)";
+    public Tensor softmax(Tensor a) {
+        if (!isNative || a.dtype() != DType.F32) return cpuFallback.softmax(a);
+        
+        DefaultTensor da = asDefault(a);
+        Shape shape = a.shape();
+        int n = (int) shape.numel();
+        CpuBuffer bufferOut = allocate(n * 4);
+        
+        int status = metalBinding.softmax(bufferOut.segment(), da.buffer().segment(), n);
+        if (status != 0) {
+            return cpuFallback.softmax(a);
+        }
+        
+        return new DefaultTensor(shape, a.dtype(), a.device(), bufferOut, this);
     }
 
     @Override
-    public int priority() {
-        // Highly prioritised. Registry will pick 100 over CpuBackend's 0.
-        return 100;
+    public Tensor slice(Tensor a, long[] offsets, long[] sizes) { return cpuFallback.slice(a, offsets, sizes); }
+
+    @Override
+    public List<Tensor> split(Tensor a, int axis, int parts) { return cpuFallback.split(a, axis, parts); }
+
+    @Override
+    public Tensor pow(Tensor a, float exponent) { return cpuFallback.pow(a, exponent); }
+
+    @Override
+    public Tensor mean(Tensor a) { return cpuFallback.mean(a); }
+
+    @Override
+    public Tensor abs(Tensor a) { return cpuFallback.abs(a); }
+
+    @Override
+    public Tensor crossEntropy(Tensor pred, Tensor target) { return cpuFallback.crossEntropy(pred, target); }
+
+    @Override
+    public Tensor binaryCrossEntropy(Tensor pred, Tensor target) { return cpuFallback.binaryCrossEntropy(pred, target); }
+
+    @Override
+    public Tensor cast(Tensor a, tech.kayys.aljabr.core.tensor.DType dtype) { return cpuFallback.cast(a, dtype); }
+
+    @Override
+    public Tensor to(Tensor a, tech.kayys.aljabr.core.tensor.DeviceType device) {
+        if (device == DeviceType.METAL || device == DeviceType.CPU) {
+            return a;
+        }
+        return cpuFallback.to(a, device);
+    }
+
+    @Override
+    public Tensor zerosLike(Tensor a) {
+        Shape shape = a.shape();
+        long sizeBytes = shape.numel() * byteSize(a.dtype());
+        CpuBuffer buffer = allocate(sizeBytes);
+        return new DefaultTensor(shape, a.dtype(), a.device(), buffer, this);
+    }
+
+    @Override
+    public Tensor sqrt(Tensor a) { return cpuFallback.sqrt(a); }
+
+    @Override
+    public Tensor relu(Tensor a) { return cpuFallback.relu(a); }
+
+    @Override
+    public Tensor sigmoid(Tensor a) { return cpuFallback.sigmoid(a); }
+
+    @Override
+    public Tensor tanh(Tensor a) { return cpuFallback.tanh(a); }
+
+    @Override
+    public Tensor log(Tensor a) { return cpuFallback.log(a); }
+
+    @Override
+    public Tensor exp(Tensor a) { return cpuFallback.exp(a); }
+
+    @Override
+    public Tensor silu(Tensor a) {
+        return cpuFallback.silu(a);
+    }
+
+    @Override
+    public Tensor flatten(Tensor a) { return cpuFallback.flatten(a); }
+
+    @Override
+    public Tensor unsqueeze(Tensor a, int dim) { return cpuFallback.unsqueeze(a, dim); }
+
+    @Override
+    public Tensor squeeze(Tensor a) { return cpuFallback.squeeze(a); }
+
+    @Override
+    public Tensor transpose(Tensor a) { return cpuFallback.transpose(a); }
+
+    @Override
+    public Tensor transpose(Tensor a, int d0, int d1) { return cpuFallback.transpose(a, d0, d1); }
+
+    @Override
+    public Tensor gelu(Tensor a) { return cpuFallback.gelu(a); }
+
+    @Override
+    public Tensor softmax(Tensor a, int dim) {
+        if (!isNative || a.dtype() != DType.F32) return cpuFallback.softmax(a, dim);
+        
+        if (dim == a.shape().rank() - 1) {
+            int rows = 1;
+            for (int i = 0; i < dim; i++) {
+                rows *= a.shape().dim(i);
+            }
+            int cols = (int) a.shape().dim(dim);
+            
+            DefaultTensor da = asDefault(a);
+            CpuBuffer bufferOut = allocate(rows * cols * 4);
+            int status = metalBinding.softmaxRows(bufferOut.segment(), da.buffer().segment(), rows, cols);
+            if (status == 0) {
+                return new DefaultTensor(a.shape(), a.dtype(), a.device(), bufferOut, this);
+            }
+        }
+        return cpuFallback.softmax(a, dim);
+    }
+
+    @Override
+    public Tensor logSoftmax(Tensor a, int dim) { return cpuFallback.logSoftmax(a, dim); }
+
+    @Override
+    public Tensor mean(Tensor a, int dim, boolean keepDim) { return cpuFallback.mean(a, dim, keepDim); }
+
+    @Override
+    public Tensor sum(Tensor a) { return cpuFallback.sum(a); }
+
+    @Override
+    public Tensor sum(Tensor a, int dim, boolean keepDim) { return cpuFallback.sum(a, dim, keepDim); }
+
+    @Override
+    public Tensor max(Tensor a) { return cpuFallback.max(a); }
+
+    @Override
+    public Tensor layerNorm(Tensor input, long[] normalizedShape, Tensor weight, Tensor bias, float eps) {
+        return cpuFallback.layerNorm(input, normalizedShape, weight, bias, eps);
+    }
+
+    @Override
+    public Tensor rmsNorm(Tensor input, Tensor weight, float eps) {
+        if (!isNative || input.dtype() != DType.F32) return cpuFallback.rmsNorm(input, weight, eps);
+        
+        DefaultTensor dInput = asDefault(input);
+        DefaultTensor dWeight = asDefault(weight);
+        
+        Shape shape = input.shape();
+        int n = (int) shape.dim(shape.rank() - 1);
+        int rows = 1;
+        for (int i = 0; i < shape.rank() - 1; i++) {
+            rows *= shape.dim(i);
+        }
+        
+        CpuBuffer bufferOut = allocate(rows * n * 4);
+        int status;
+        if (rows == 1) {
+            status = metalBinding.rmsNorm(bufferOut.segment(), dInput.buffer().segment(), dWeight.buffer().segment(), n, eps, false);
+        } else {
+            status = metalBinding.rmsNormRows(bufferOut.segment(), dInput.buffer().segment(), dWeight.buffer().segment(), rows, n, eps, false);
+        }
+        
+        if (status != 0) {
+            return cpuFallback.rmsNorm(input, weight, eps);
+        }
+        
+        return new DefaultTensor(shape, input.dtype(), input.device(), bufferOut, this);
+    }
+
+    @Override
+    public Tensor batchNorm(Tensor input, Tensor weight, Tensor bias, Tensor runningMean, Tensor runningVar, boolean training, float momentum, float eps) {
+        return cpuFallback.batchNorm(input, weight, bias, runningMean, runningVar, training, momentum, eps);
+    }
+
+    @Override
+    public Tensor conv2d(Tensor input, Tensor weight, Tensor bias, int stride, int padding, int dilation, int groups) {
+        return cpuFallback.conv2d(input, weight, bias, stride, padding, dilation, groups);
+    }
+
+    @Override
+    public Tensor maxPool2d(Tensor input, int kernelSize, int stride, int padding) {
+        return cpuFallback.maxPool2d(input, kernelSize, stride, padding);
+    }
+
+    @Override
+    public Tensor adaptiveAvgPool2d(Tensor input, int outputH, int outputW) {
+        return cpuFallback.adaptiveAvgPool2d(input, outputH, outputW);
+    }
+
+    @Override
+    public Tensor dropout(Tensor input, float p, boolean training) {
+        return cpuFallback.dropout(input, p, training);
+    }
+
+    @Override
+    public Tensor embedding(Tensor weight, Tensor input, long paddingIdx) {
+        return cpuFallback.embedding(weight, input, paddingIdx);
+    }
+
+    @Override
+    public long numel(Tensor a) {
+        return cpuFallback.numel(a);
     }
 }

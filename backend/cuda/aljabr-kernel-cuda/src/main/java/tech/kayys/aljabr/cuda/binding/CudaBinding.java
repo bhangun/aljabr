@@ -10,103 +10,88 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * FFM-based binding to the Aljabr CUDA bridge ({@code libaljabr_cuda.so}).
- *
- * <p>
- * Mirrors the pattern of {@link tech.kayys.aljabr.metal.binding.MetalBinding}:
- * a singleton loaded once at startup via {@link SymbolLookup#libraryLookup},
- * falling back to a CPU implementation when the library is absent.
- *
- * <h2>CUDA Memory Model</h2>
- * <p>
- * On NVIDIA GPUs with unified memory (A100, H100), {@link MemorySegment}
- * allocated with {@link Arena#ofShared()} can be accessed by the GPU via
- * CUDA unified virtual addressing. The bridge's {@code cuda_wrap_ptr()}
- * function gives CUDA a direct pointer — <b>zero copy</b> for UMA systems.
- *
- * <h2>Lifecycle</h2>
- *
- * <pre>{@code
- * // At startup (e.g., CudaRunner.initialize()):
- * boolean loaded = CudaBinding.initialize(
- *         Path.of("/usr/local/cuda/lib64/libaljabr_cuda.so"));
- * CudaBinding binding = CudaBinding.getInstance();
- *
- * // Use:
- * binding.init();
- * binding.matmul(C, A, B, M, K, N, 1.0f, 0.0f);
- * binding.attention(out, Q, K, V, bt, ctx, B, T, H, D, blockSize, maxBlocks, scale, 1);
- * }</pre>
+ * FFM-based binding directly to NVIDIA CUDA Runtime (libcudart) and cuBLAS (libcublas).
  */
 public class CudaBinding {
 
     private static final Logger LOG = Logger.getLogger(CudaBinding.class);
     private static volatile CudaBinding instance;
 
-    // ── Function names ────────────────────────────────────────────────────────
+    // CUDA Runtime API
+    private static final String FN_CUDA_MALLOC = "cudaMalloc";
+    private static final String FN_CUDA_MALLOC_MANAGED = "cudaMallocManaged";
+    private static final String FN_CUDA_FREE = "cudaFree";
+    private static final String FN_CUDA_MEMCPY = "cudaMemcpy";
+    private static final String FN_CUDA_GET_DEVICE_COUNT = "cudaGetDeviceCount";
+    private static final String FN_CUDA_SET_DEVICE = "cudaSetDevice";
 
-    private static final String FN_INIT = "aljabr_cuda_init";
-    private static final String FN_FREE_MEM = "aljabr_cuda_free_memory";
-    private static final String FN_ALLOC = "aljabr_cuda_malloc";
-    private static final String FN_ALLOC_MANAGED = "aljabr_cuda_malloc_managed";
-    private static final String FN_FREE = "aljabr_cuda_free";
-    private static final String FN_MEMCPY_H2D = "aljabr_cuda_memcpy_h2d";
-    private static final String FN_MEMCPY_D2H = "aljabr_cuda_memcpy_d2h";
-    private static final String FN_MEMCPY_ASYNC = "aljabr_cuda_memcpy_async";
-    private static final String FN_STREAM_CREATE = "aljabr_cuda_stream_create";
-    private static final String FN_STREAM_DESTROY = "aljabr_cuda_stream_destroy";
-    private static final String FN_STREAM_SYNCHRONIZE = "aljabr_cuda_stream_synchronize";
-    private static final String FN_MATMUL = "aljabr_cuda_matmul";
-    private static final String FN_ATTENTION = "aljabr_cuda_attention";
-    private static final String FN_FLASH_ATTN_V2 = "aljabr_cuda_flash_attn_v2";
-    private static final String FN_FLASH_ATTN_V3 = "aljabr_cuda_flash_attn_v3";
-    private static final String FN_RMSNORM = "aljabr_cuda_rmsnorm";
-    private static final String FN_SILU_FFN = "aljabr_cuda_silu_ffn";
-    private static final String FN_DEVICE_COUNT = "aljabr_cuda_device_count";
-    private static final String FN_DEVICE_NAME = "aljabr_cuda_device_name";
-    private static final String FN_DEVICE_GET = "aljabr_cuda_device_get";
-    private static final String FN_COMPUTE_CAP = "aljabr_cuda_compute_capability";
+    // cuBLAS API
+    private static final String FN_CUBLAS_CREATE = "cublasCreate_v2";
+    private static final String FN_CUBLAS_DESTROY = "cublasDestroy_v2";
+    private static final String FN_CUBLAS_SGEMM = "cublasSgemm_v2";
 
-    private final SymbolLookup lookup;
+    // cudaMemcpyKind
+    public static final int cudaMemcpyHostToHost = 0;
+    public static final int cudaMemcpyHostToDevice = 1;
+    public static final int cudaMemcpyDeviceToHost = 2;
+    public static final int cudaMemcpyDeviceToDevice = 3;
+
+    // cublasOperation_t
+    public static final int CUBLAS_OP_N = 0;
+    public static final int CUBLAS_OP_T = 1;
+    public static final int CUBLAS_OP_C = 2;
+
+    private final SymbolLookup cudartLookup;
+    private final SymbolLookup cublasLookup;
     private final Map<String, MethodHandle> handles = new ConcurrentHashMap<>();
     private final boolean nativeAvailable;
 
-    private CudaBinding(SymbolLookup lookup) {
-        this.lookup = lookup;
-        this.nativeAvailable = (lookup != null);
-        if (nativeAvailable)
+    private CudaBinding(SymbolLookup cudart, SymbolLookup cublas) {
+        this.cudartLookup = cudart;
+        this.cublasLookup = cublas;
+        this.nativeAvailable = (cudart != null && cublas != null);
+        if (nativeAvailable) {
             bindAll();
+        }
     }
 
-    // ── Initialisation ────────────────────────────────────────────────────────
-
-    public static boolean initialize(Path libraryPath) {
+    public static boolean initialize() {
         if (instance != null)
             return instance.nativeAvailable;
         try {
-            SymbolLookup lk = SymbolLookup.libraryLookup(libraryPath, Arena.global());
-            instance = new CudaBinding(lk);
-            LOG.infof("CudaBinding loaded from %s", libraryPath);
+            // Attempt to load system libraries
+            System.loadLibrary("cudart");
+            System.loadLibrary("cublas");
+            SymbolLookup lk = SymbolLookup.loaderLookup();
+            instance = new CudaBinding(lk, lk);
+            LOG.info("CudaBinding loaded libcudart and libcublas via system library path.");
             return true;
-        } catch (Exception e) {
-            LOG.warnf("CudaBinding: library not found at %s (%s) — CPU fallback active",
-                    libraryPath, e.getMessage());
-            instance = new CudaBinding(null);
-            return false;
+        } catch (Throwable e) {
+            LOG.warnf("CudaBinding: system libraries not found (%s). Attempting explicit paths.", e.getMessage());
+            try {
+                SymbolLookup cudart = SymbolLookup.libraryLookup(Path.of("/usr/local/cuda/lib64/libcudart.so"), Arena.global());
+                SymbolLookup cublas = SymbolLookup.libraryLookup(Path.of("/usr/local/cuda/lib64/libcublas.so"), Arena.global());
+                instance = new CudaBinding(cudart, cublas);
+                LOG.info("CudaBinding loaded libcudart and libcublas via explicit paths.");
+                return true;
+            } catch (Throwable e2) {
+                LOG.warnf("CudaBinding: explicit libraries not found (%s). CPU fallback active.", e2.getMessage());
+                instance = new CudaBinding(null, null);
+                return false;
+            }
         }
     }
 
     public static void initializeFallback() {
         if (instance != null)
             return;
-        instance = new CudaBinding(null);
+        instance = new CudaBinding(null, null);
         LOG.info("CudaBinding: CPU fallback mode");
     }
 
     public static CudaBinding getInstance() {
         if (instance == null)
-            throw new IllegalStateException(
-                    "CudaBinding not initialized — call initialize() first");
+            throw new IllegalStateException("CudaBinding not initialized — call initialize() first");
         return instance;
     }
 
@@ -116,410 +101,121 @@ public class CudaBinding {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    /**
-     * Initialize the CUDA runtime and select device.
-     *
-     * @param deviceId CUDA device ID (0-based)
-     * @return 0 on success, negative on error
-     */
-    public int init(int deviceId) {
-        if (!nativeAvailable)
-            return 0; // CPU fallback — nothing to init
-        return (int) invoke(FN_INIT, deviceId);
-    }
-
-    /**
-     * Get the number of CUDA devices.
-     */
-    public int deviceCount() {
-        if (!nativeAvailable)
-            return 0;
-        return (int) invoke(FN_DEVICE_COUNT);
-    }
-
-    /**
-     * Select the CUDA device for subsequent operations.
-     */
-    public int deviceGet(int deviceId) {
-        if (!nativeAvailable)
-            return 0;
-        return (int) invoke(FN_DEVICE_GET, deviceId);
-    }
-
-    /**
-     * Get device name.
-     */
-    public String deviceName(int deviceId) {
-        if (!nativeAvailable)
-            return "CPU (no CUDA)";
+    public int cudaGetDeviceCount() {
+        if (!nativeAvailable) return 0;
         try (Arena a = Arena.ofConfined()) {
-            MemorySegment buf = a.allocate(256L);
-            invoke(FN_DEVICE_NAME, buf, 256, deviceId);
-            return buf.getString(0, java.nio.charset.StandardCharsets.UTF_8);
+            MemorySegment countPtr = a.allocate(ValueLayout.JAVA_INT);
+            int status = (int) invoke(FN_CUDA_GET_DEVICE_COUNT, countPtr);
+            if (status != 0) return 0;
+            return countPtr.get(ValueLayout.JAVA_INT, 0);
         }
     }
 
-    /**
-     * Get compute capability (major * 10 + minor).
-     * E.g., 80 = 8.0 (A100), 90 = 9.0 (H100)
-     */
-    public int computeCapability(int deviceId) {
-        if (!nativeAvailable)
-            return 0;
-        return (int) invoke(FN_COMPUTE_CAP, deviceId);
+    public int cudaSetDevice(int deviceId) {
+        if (!nativeAvailable) return 0;
+        return (int) invoke(FN_CUDA_SET_DEVICE, deviceId);
     }
 
-    /**
-     * Get free GPU memory in bytes.
-     */
-    public long freeMemory() {
-        if (!nativeAvailable)
-            return Runtime.getRuntime().freeMemory();
-        return (long) invoke(FN_FREE_MEM);
-    }
-
-    /**
-     * Allocate device memory.
-     *
-     * @param bytes Size in bytes
-     * @return MemorySegment pointing to device memory
-     */
-    public MemorySegment malloc(long bytes) {
-        if (!nativeAvailable) {
-            try (Arena a = Arena.ofConfined()) {
-                return a.allocate(bytes, 64);
-            }
-        }
-        return (MemorySegment) invoke(FN_ALLOC, bytes, 64L);
-    }
-
-    /**
-     * Allocate managed (unified) memory for zero-copy on A100/H100.
-     *
-     * @param bytes Size in bytes
-     * @param flags Attach flags (typically HIP_MEM_ATTACH_GLOBAL)
-     * @return MemorySegment pointing to managed memory
-     */
-    public MemorySegment mallocManaged(long bytes, int flags) {
+    public MemorySegment cudaMalloc(long bytes) {
         if (!nativeAvailable) {
             return Arena.ofAuto().allocate(bytes, 64);
         }
-        return (MemorySegment) invoke(FN_ALLOC_MANAGED, bytes, flags);
+        try (Arena a = Arena.ofConfined()) {
+            MemorySegment ptrPtr = a.allocate(ValueLayout.ADDRESS);
+            int status = (int) invoke(FN_CUDA_MALLOC, ptrPtr, bytes);
+            if (status != 0) throw new RuntimeException("cudaMalloc failed with code " + status);
+            return ptrPtr.get(ValueLayout.ADDRESS, 0);
+        }
     }
 
-    /**
-     * Free device memory.
-     */
-    public void free(MemorySegment ptr) {
-        if (!nativeAvailable)
-            return;
-        invoke(FN_FREE, ptr);
+    public MemorySegment cudaMallocManaged(long bytes, int flags) {
+        if (!nativeAvailable) {
+            return Arena.ofAuto().allocate(bytes, 64);
+        }
+        try (Arena a = Arena.ofConfined()) {
+            MemorySegment ptrPtr = a.allocate(ValueLayout.ADDRESS);
+            int status = (int) invoke(FN_CUDA_MALLOC_MANAGED, ptrPtr, bytes, flags);
+            if (status != 0) throw new RuntimeException("cudaMallocManaged failed with code " + status);
+            return ptrPtr.get(ValueLayout.ADDRESS, 0);
+        }
     }
 
-    /**
-     * Copy memory from host to device.
-     */
-    public void memcpyH2D(MemorySegment dst, MemorySegment src, long bytes) {
+    public void cudaFree(MemorySegment ptr) {
+        if (!nativeAvailable) return;
+        invoke(FN_CUDA_FREE, ptr);
+    }
+
+    public void cudaMemcpy(MemorySegment dst, MemorySegment src, long count, int kind) {
         if (!nativeAvailable) {
             dst.copyFrom(src);
             return;
         }
-        invoke(FN_MEMCPY_H2D, dst, src, bytes);
+        int status = (int) invoke(FN_CUDA_MEMCPY, dst, src, count, kind);
+        if (status != 0) throw new RuntimeException("cudaMemcpy failed with code " + status);
     }
 
-    /**
-     * Copy memory from device to host.
-     */
-    public void memcpyD2H(MemorySegment dst, MemorySegment src, long bytes) {
-        if (!nativeAvailable) {
-            dst.copyFrom(src);
-            return;
+    public MemorySegment cublasCreate() {
+        if (!nativeAvailable) return MemorySegment.NULL;
+        try (Arena a = Arena.ofConfined()) {
+            MemorySegment handlePtr = a.allocate(ValueLayout.ADDRESS);
+            int status = (int) invoke(FN_CUBLAS_CREATE, handlePtr);
+            if (status != 0) throw new RuntimeException("cublasCreate failed with code " + status);
+            return handlePtr.get(ValueLayout.ADDRESS, 0);
         }
-        invoke(FN_MEMCPY_D2H, dst, src, bytes);
     }
 
-    /**
-     * Create a CUDA stream for async operations.
-     */
-    public MemorySegment streamCreate() {
-        if (!nativeAvailable)
-            return MemorySegment.NULL;
-        return (MemorySegment) invoke(FN_STREAM_CREATE);
+    public void cublasDestroy(MemorySegment handle) {
+        if (!nativeAvailable || handle.equals(MemorySegment.NULL)) return;
+        invoke(FN_CUBLAS_DESTROY, handle);
     }
 
-    /**
-     * Destroy a CUDA stream.
-     */
-    public void streamDestroy(MemorySegment stream) {
-        if (!nativeAvailable)
-            return;
-        invoke(FN_STREAM_DESTROY, stream);
-    }
-
-    /**
-     * Synchronize a CUDA stream.
-     */
-    public void streamSynchronize(MemorySegment stream) {
-        if (!nativeAvailable)
-            return;
-        invoke(FN_STREAM_SYNCHRONIZE, stream);
-    }
-
-    /**
-     * Matrix multiplication via CUDA: C = alpha * A × B + beta * C
-     *
-     * <p>
-     * On NVIDIA GPUs this dispatches to cuBLAS or custom tensor core kernels.
-     *
-     * @param C     Output [M × N float32]
-     * @param A     Left [M × K float32]
-     * @param B     Right [K × N float32]
-     * @param M,K,N Dimensions
-     * @param alpha Scale factor
-     * @param beta  Accumulation (0 = overwrite)
-     * @return 0 on success
-     */
-    public int matmul(MemorySegment C, MemorySegment A, MemorySegment B,
-                      int M, int K, int N, float alpha, float beta) {
-        if (!nativeAvailable) {
-            return CudaCpuFallback.matmul(C, A, B, M, K, N, alpha, beta);
+    public int cublasSgemm(MemorySegment handle, int transa, int transb,
+                           int m, int n, int k,
+                           float alpha,
+                           MemorySegment A, int lda,
+                           MemorySegment B, int ldb,
+                           float beta,
+                           MemorySegment C, int ldc) {
+        if (!nativeAvailable) throw new UnsupportedOperationException("cuBLAS not available");
+        
+        try (Arena a = Arena.ofConfined()) {
+            MemorySegment alphaPtr = a.allocateFrom(ValueLayout.JAVA_FLOAT, alpha);
+            MemorySegment betaPtr = a.allocateFrom(ValueLayout.JAVA_FLOAT, beta);
+            
+            return (int) invoke(FN_CUBLAS_SGEMM, handle, transa, transb,
+                    m, n, k, alphaPtr, A, lda, B, ldb, betaPtr, C, ldc);
         }
-        return (int) invoke(FN_MATMUL, C, A, B, M, K, N, alpha, beta);
-    }
-
-    /**
-     * Paged softmax attention via CUDA.
-     *
-     * <p>
-     * K/V cache is accessed directly from Aljabr's
-     * {@link tech.kayys.aljabr.kvcache.PhysicalBlockPool} off-heap slabs.
-     *
-     * @param out         [B, T, H, D] float32
-     * @param Q           [B, T, H, D] float32
-     * @param K_cache     paged K pool
-     * @param V_cache     paged V pool
-     * @param blockTable  [B, maxBlocks] int32
-     * @param contextLens [B] int32
-     * @param scale       1/sqrt(D)
-     * @param isCausal    1 = causal mask
-     * @return 0 on success
-     */
-    public int attention(MemorySegment out, MemorySegment Q,
-                         MemorySegment K_cache, MemorySegment V_cache,
-                         MemorySegment blockTable, MemorySegment contextLens,
-                         int B, int T, int H, int D,
-                         int blockSize, int maxBlocks,
-                         float scale, int isCausal) {
-        if (!nativeAvailable) {
-            return CudaCpuFallback.attention(out, Q, K_cache, V_cache,
-                    blockTable, contextLens, B, T, H, D, blockSize, maxBlocks, scale, isCausal);
-        }
-        return (int) invoke(FN_ATTENTION,
-                out, Q, K_cache, V_cache, blockTable, contextLens,
-                B, T, H, D, blockSize, maxBlocks, scale, isCausal);
-    }
-
-    /**
-     * FlashAttention-2 kernel for A100+ (compute cap ≥ 8.0).
-     *
-     * @param out         Output [B, T, H, D]
-     * @param Q           Query [B, T, H, D]
-     * @param K           Key [B, S, H, D]
-     * @param V           Value [B, S, H, D]
-     * @param B           Batch size
-     * @param T           Query sequence length
-     * @param S           Key/Value sequence length
-     * @param H           Number of heads
-     * @param D           Head dimension
-     * @param scale       Attention scale
-     * @param isCausal    1 = causal mask
-     * @return 0 on success
-     */
-    public int flashAttnV2(MemorySegment out, MemorySegment Q,
-                           MemorySegment K, MemorySegment V,
-                           int B, int T, int S, int H, int D,
-                           float scale, int isCausal) {
-        if (!nativeAvailable) {
-            // Fall back to regular attention
-            try (Arena a = Arena.ofConfined()) {
-                MemorySegment fakeBt = a.allocate((long) B * 4L, 4);
-                MemorySegment fakeCl = a.allocate((long) B * 4L, 4);
-                for (int i = 0; i < B; i++) {
-                    fakeBt.setAtIndex(ValueLayout.JAVA_INT, i, 0);
-                    fakeCl.setAtIndex(ValueLayout.JAVA_INT, i, S);
-                }
-                return attention(out, Q, K, V, fakeBt, fakeCl,
-                        B, T, H, D, 64, 1, scale, isCausal);
-            }
-        }
-        return (int) invoke(FN_FLASH_ATTN_V2,
-                out, Q, K, V, B, T, S, H, D, scale, isCausal);
-    }
-
-    /**
-     * FlashAttention-3 kernel for H100+ (compute cap ≥ 9.0) with FP8 support.
-     */
-    public int flashAttnV3(MemorySegment out, MemorySegment Q,
-                           MemorySegment K, MemorySegment V,
-                           int B, int T, int S, int H, int D,
-                           float scale, int isCausal, int useFp8) {
-        if (!nativeAvailable) {
-            return flashAttnV2(out, Q, K, V, B, T, S, H, D, scale, isCausal);
-        }
-        return (int) invoke(FN_FLASH_ATTN_V3,
-                out, Q, K, V, B, T, S, H, D, scale, isCausal, useFp8);
-    }
-
-    /**
-     * RMS normalisation: out = x / rms(x) * weight.
-     *
-     * @return 0 on success
-     */
-    public int rmsNorm(MemorySegment out, MemorySegment x,
-                       MemorySegment weight, int N, float eps) {
-        if (!nativeAvailable)
-            return CudaCpuFallback.rmsNorm(out, x, weight, N, eps);
-        return (int) invoke(FN_RMSNORM, out, x, weight, N, eps);
-    }
-
-    /**
-     * SiLU-gated FFN: out = silu(gate) * up
-     *
-     * @return 0 on success
-     */
-    public int siluFfn(MemorySegment out, MemorySegment gate,
-                       MemorySegment up, int N) {
-        if (!nativeAvailable)
-            return CudaCpuFallback.siluFfn(out, gate, up, N);
-        return (int) invoke(FN_SILU_FFN, out, gate, up, N);
-    }
-
-    /**
-     * Generic kernel launch via CUDA (FFM).
-     */
-    public void launchKernel(long functionHandle,
-                            int gridX, int gridY, int gridZ,
-                            int blockX, int blockY, int blockZ,
-                            int sharedMem, MemorySegment stream,
-                            MemorySegment[] params, Object extra) {
-        if (!nativeAvailable) {
-            throw new UnsupportedOperationException("CUDA launchKernel not available in CPU fallback");
-        }
-        // This would require a FN_LAUNCH_KERNEL binding in bindAll()
-        // For now, let's just log and skip if not bound to avoid RuntimeException in invoke()
-        // because we don't have the native function name yet.
-        LOG.warn("CudaBinding: launchKernel requested but not yet implemented in native bridge");
-    }
-
-    /**
-     * Gets maximum grid size for a dimension.
-     */
-    public int maxGridSize(int dim) {
-        return 2147483647; // Default max for CUDA
-    }
-
-    /**
-     * Gets maximum threads per block.
-     */
-    public int maxThreadsPerBlock() {
-        return 1024; // Default max for CUDA
     }
 
     // ── FFM binding ───────────────────────────────────────────────────────────
 
     private void bindAll() {
-        // int aljabr_cuda_init(int deviceId)
-        bind(FN_INIT, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+        bind(cudartLookup, FN_CUDA_MALLOC, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        bind(cudartLookup, FN_CUDA_MALLOC_MANAGED, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
+        bind(cudartLookup, FN_CUDA_FREE, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS));
+        bind(cudartLookup, FN_CUDA_MEMCPY, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
+        bind(cudartLookup, FN_CUDA_GET_DEVICE_COUNT, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS));
+        bind(cudartLookup, FN_CUDA_SET_DEVICE, FunctionDescriptor.of(ValueLayout.JAVA_INT,
                 ValueLayout.JAVA_INT));
 
-        // int aljabr_cuda_device_count()
-        bind(FN_DEVICE_COUNT, FunctionDescriptor.of(ValueLayout.JAVA_INT));
-
-        // int aljabr_cuda_device_get(int deviceId)
-        bind(FN_DEVICE_GET, FunctionDescriptor.of(ValueLayout.JAVA_INT,
-                ValueLayout.JAVA_INT));
-
-        // int aljabr_cuda_device_name(char* buf, int bufSz, int deviceId)
-        bind(FN_DEVICE_NAME, FunctionDescriptor.of(ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-
-        // int aljabr_cuda_compute_capability(int deviceId)
-        bind(FN_COMPUTE_CAP, FunctionDescriptor.of(ValueLayout.JAVA_INT,
-                ValueLayout.JAVA_INT));
-
-        // long aljabr_cuda_free_memory()
-        bind(FN_FREE_MEM, FunctionDescriptor.of(ValueLayout.JAVA_LONG));
-
-        // void* aljabr_cuda_malloc(size_t bytes, size_t align)
-        bind(FN_ALLOC, FunctionDescriptor.of(ValueLayout.ADDRESS,
-                ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG));
-
-        // void* aljabr_cuda_malloc_managed(size_t bytes, int flags)
-        bind(FN_ALLOC_MANAGED, FunctionDescriptor.of(ValueLayout.ADDRESS,
-                ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
-
-        // void aljabr_cuda_free(void* ptr)
-        bind(FN_FREE, FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-
-        // void aljabr_cuda_memcpy_h2d(void* dst, void* src, size_t bytes)
-        bind(FN_MEMCPY_H2D, FunctionDescriptor.ofVoid(
-                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-
-        // void aljabr_cuda_memcpy_d2h(void* dst, void* src, size_t bytes)
-        bind(FN_MEMCPY_D2H, FunctionDescriptor.ofVoid(
-                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-
-        // void* aljabr_cuda_stream_create()
-        bind(FN_STREAM_CREATE, FunctionDescriptor.of(ValueLayout.ADDRESS));
-
-        // void aljabr_cuda_stream_destroy(void* stream)
-        bind(FN_STREAM_DESTROY, FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-
-        // void aljabr_cuda_stream_synchronize(void* stream)
-        bind(FN_STREAM_SYNCHRONIZE, FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-
-        // int aljabr_cuda_matmul(C, A, B, M, K, N, alpha, beta)
-        bind(FN_MATMUL, FunctionDescriptor.of(ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
+        bind(cublasLookup, FN_CUBLAS_CREATE, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS));
+        bind(cublasLookup, FN_CUBLAS_DESTROY, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS));
+        bind(cublasLookup, FN_CUBLAS_SGEMM, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
                 ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
-                ValueLayout.JAVA_FLOAT, ValueLayout.JAVA_FLOAT));
-
-        // int aljabr_cuda_attention(out, Q, K, V, bt, ctx, B, T, H, D, bs, mb, scale, causal)
-        bind(FN_ATTENTION, FunctionDescriptor.of(ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
-                ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
-                ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
-                ValueLayout.JAVA_FLOAT, ValueLayout.JAVA_INT));
-
-        // int aljabr_cuda_flash_attn_v2(out, Q, K, V, B, T, S, H, D, scale, causal)
-        bind(FN_FLASH_ATTN_V2, FunctionDescriptor.of(ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
-                ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
-                ValueLayout.JAVA_FLOAT, ValueLayout.JAVA_INT));
-
-        // int aljabr_cuda_flash_attn_v3(out, Q, K, V, B, T, S, H, D, scale, causal, fp8)
-        bind(FN_FLASH_ATTN_V3, FunctionDescriptor.of(ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
-                ValueLayout.ADDRESS,
-                ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
-                ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
-                ValueLayout.JAVA_FLOAT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-
-        // int aljabr_cuda_rmsnorm(out, x, weight, N, eps)
-        bind(FN_RMSNORM, FunctionDescriptor.of(ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
-                ValueLayout.JAVA_INT, ValueLayout.JAVA_FLOAT));
-
-        // int aljabr_cuda_silu_ffn(out, gate, up, N)
-        bind(FN_SILU_FFN, FunctionDescriptor.of(ValueLayout.JAVA_INT,
-                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
-                ValueLayout.JAVA_INT));
+                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
     }
 
-    private void bind(String name, FunctionDescriptor descriptor) {
+    private void bind(SymbolLookup lookup, String name, FunctionDescriptor descriptor) {
         Optional<MemorySegment> sym = lookup.find(name);
         if (sym.isPresent()) {
             handles.put(name, Linker.nativeLinker().downcallHandle(sym.get(), descriptor));
@@ -529,7 +225,6 @@ public class CudaBinding {
         }
     }
 
-    /** Reflective invoke helper — wraps Throwable as RuntimeException. */
     private Object invoke(String name, Object... args) {
         MethodHandle mh = handles.get(name);
         if (mh == null)
@@ -541,9 +236,7 @@ public class CudaBinding {
         }
     }
 
-    // ── Test helper ───────────────────────────────────────────────────────────
-
-    static void reset() {
-        instance = null;
+    public String deviceName(int deviceId) {
+        return "CUDA Device " + deviceId; // Simplified as cudaGetDeviceProperties requires struct mapping
     }
 }

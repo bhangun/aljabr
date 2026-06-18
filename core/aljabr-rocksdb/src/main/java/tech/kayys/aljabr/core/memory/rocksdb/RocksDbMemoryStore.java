@@ -43,26 +43,35 @@ public class RocksDbMemoryStore implements UnifiedMemoryStore {
     }
 
     @Override
-    public Optional<MemorySegment> getZeroCopy(byte[] key, Arena arena) {
+    public Optional<MemorySegment> getZeroCopy(byte[] key, long expectedSize, Arena arena) {
         try {
-            // Standard RocksDB get creates a byte[] on heap.
-            // For true zero-copy, you would use get(ColumnFamilyHandle, ReadOptions, ByteBuffer)
-            // with a direct buffer. We use the standard get here for simplicity without column families.
-            byte[] data = db.get(key);
-            if (data == null) {
+            // Wrap the direct buffer as a MemorySegment, allocated natively off-heap.
+            // Note: In newer JDKs, MemorySegment.ofBuffer provides a segment backed by the buffer.
+            // But we specifically need this memory to be owned by the provided Arena.
+            // Since ByteBuffer.allocateDirect is un-managed or GC-managed, for true Arena ownership
+            // one would allocate from the Arena directly.
+            // Let's allocate directly from Arena and provide its ByteBuffer to RocksDB!
+            
+            MemorySegment segment = arena.allocate(expectedSize);
+            ByteBuffer arenaBuf = segment.asByteBuffer();
+            
+            ByteBuffer keyBuf = ByteBuffer.allocateDirect(key.length);
+            keyBuf.put(key);
+            keyBuf.flip();
+            
+            org.rocksdb.ReadOptions ro = new org.rocksdb.ReadOptions();
+            int read = db.get(ro, keyBuf, arenaBuf);
+            ro.close();
+            
+            if (read == org.rocksdb.RocksDB.NOT_FOUND || read < 0) {
                 return Optional.empty();
             }
 
-            // Allocate an off-heap segment inside the provided Arena and copy the data.
-            MemorySegment segment = arena.allocate(data.length);
-            MemorySegment.copy(data, 0, segment, java.lang.foreign.ValueLayout.JAVA_BYTE, 0, data.length);
-
-            return Optional.of(segment);
+            return Optional.of(segment.asSlice(0, read));
         } catch (RocksDBException e) {
             throw new RuntimeException("RocksDB get failed", e);
         }
     }
-
     @Override
     public void delete(byte[] key) {
         try {

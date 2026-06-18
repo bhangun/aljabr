@@ -1,6 +1,7 @@
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.plugins.signing.SigningExtension
 
 buildscript {
     repositories {
@@ -55,6 +56,17 @@ subprojects {
     java {
         toolchain {
             languageVersion.set(JavaLanguageVersion.of(25))
+        }
+        withSourcesJar()
+        withJavadocJar()
+    }
+
+    // Configure Javadoc task
+    tasks.withType<Javadoc> {
+        options {
+            this as StandardJavadocDocletOptions
+            addBooleanOption("Xdoclint:none", true)
+            addStringOption("-add-modules", "jdk.incubator.vector")
         }
     }
 
@@ -229,11 +241,60 @@ subprojects {
         extensions.configure<PublishingExtension>("publishing") {
             repositories {
                 mavenLocal()
+
+                // ── GitHub Packages ───────────────────────────────────────────
+                // Credentials: set GITHUB_ACTOR and GITHUB_TOKEN as repository secrets.
+                // They are automatically available inside GitHub Actions workflows.
+                val ghActor  = System.getenv("GITHUB_ACTOR")  ?: providers.gradleProperty("gpr.user").orNull
+                val ghToken  = System.getenv("GITHUB_TOKEN")  ?: providers.gradleProperty("gpr.key").orNull
+                if (!ghToken.isNullOrBlank() && !ghActor.isNullOrBlank()) {
+                    maven {
+                        name = "GitHubPackages"
+                        url  = uri("https://maven.pkg.github.com/wayang-platform/wayang-platform")
+                        credentials {
+                            username = ghActor
+                            password = ghToken
+                        }
+                    }
+                }
             }
             if (publications.findByName("mavenJava") == null) {
                 publications.create<MavenPublication>("mavenJava") {
                     from(components["java"])
+                    pom {
+                        name.set(project.name)
+                        description.set("Aljabr ML Framework Module")
+                        url.set("https://github.com/wayang-platform/wayang-platform")
+                        licenses {
+                            license {
+                                name.set("The Apache License, Version 2.0")
+                                url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                            }
+                        }
+                        developers {
+                            developer {
+                                id.set("wayang")
+                                name.set("Wayang Platform")
+                                email.set("dev@wayang.tech")
+                            }
+                        }
+                        scm {
+                            connection.set("scm:git:git://github.com/wayang-platform/wayang-platform.git")
+                            developerConnection.set("scm:git:ssh://github.com/wayang-platform/wayang-platform.git")
+                            url.set("https://github.com/wayang-platform/wayang-platform")
+                        }
+                    }
                 }
+            }
+        }
+        
+        val signingKey = System.getenv("ORG_GRADLE_PROJECT_signingKey")
+        if (!signingKey.isNullOrBlank()) {
+            apply(plugin = "signing")
+            extensions.configure<SigningExtension>("signing") {
+                val signingPassword = System.getenv("ORG_GRADLE_PROJECT_signingPassword")
+                useInMemoryPgpKeys(signingKey, signingPassword)
+                sign(extensions.getByType<PublishingExtension>().publications["mavenJava"])
             }
         }
     }

@@ -22,6 +22,11 @@ public final class DefaultTensor implements Tensor {
         this.backend = backend;
     }
 
+    @Override
+    public Tensor eval() {
+        return this;
+    }
+
     @Override public Shape shape()          { return shape; }
     @Override public DType dtype()          { return dtype; }
     @Override public DeviceType device()    { return device; }

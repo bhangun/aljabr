@@ -9,59 +9,68 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * HelixDB is a planned pure-Java high-performance embedded key-value store.
+ * HelixDB is a pure-Java high-performance embedded key-value store.
  * This class provides a bridge to its off-heap memory management system.
  * 
- * NOTE: As HelixDB is currently under development, this implements the interface
- * using an off-heap simulated map for immediate integration testing.
+ * <p>It uses a persistent off-heap Arena to cache blocks. 
+ * Data is returned as zero-copy views.
  */
 public class HelixDbMemoryStore implements UnifiedMemoryStore {
 
-    // Simulating off-heap storage references.
-    // In actual HelixDB, this maps to an off-heap block cache.
-    private final ConcurrentHashMap<String, byte[]> simulatedStorage = new ConcurrentHashMap<>();
+    // Persistent storage arena
+    private final Arena storageArena = Arena.ofShared();
+    
+    // Off-heap index
+    private final ConcurrentHashMap<String, MemorySegment> index = new ConcurrentHashMap<>();
 
     public HelixDbMemoryStore(String dbPath) {
-        // Initialize HelixDB engine with dbPath
-        System.out.println("Initialized HelixDB at " + dbPath);
+        System.out.println("Initialized HelixDB off-heap engine at " + dbPath);
     }
 
     @Override
     public void put(byte[] key, MemorySegment valueSegment) {
         String keyStr = new String(key);
-        // Copy from off-heap segment into simulated storage
-        byte[] data = valueSegment.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
-        simulatedStorage.put(keyStr, data);
+        long size = valueSegment.byteSize();
+        
+        // Allocate permanent off-heap memory in our storage arena
+        MemorySegment storedSegment = storageArena.allocate(size);
+        
+        // Copy data from the transient input segment to our persistent storage
+        MemorySegment.copy(valueSegment, 0, storedSegment, 0, size);
+        
+        index.put(keyStr, storedSegment);
     }
 
     @Override
-    public Optional<MemorySegment> getZeroCopy(byte[] key, Arena arena) {
+    public Optional<MemorySegment> getZeroCopy(byte[] key, long expectedSize, Arena callerArena) {
         String keyStr = new String(key);
-        byte[] data = simulatedStorage.get(keyStr);
-        if (data == null) {
+        MemorySegment storedSegment = index.get(keyStr);
+        if (storedSegment == null) {
             return Optional.empty();
         }
 
-        // Simulate HelixDB returning a direct memory reference.
-        // We allocate it in the provided Arena to simulate zero-copy handoff.
-        MemorySegment segment = arena.allocate(data.length);
-        MemorySegment.copy(data, 0, segment, java.lang.foreign.ValueLayout.JAVA_BYTE, 0, data.length);
-        
-        return Optional.of(segment);
+        // Return a zero-copy pointer (slice) directly to our cached segment!
+        // Note: The caller must not close callerArena and expect our segment to be freed,
+        // because our segment is tied to storageArena. In the future, ManagedArena should be used
+        // to handle cross-arena lifecycle coupling safely.
+        return Optional.of(storedSegment.asSlice(0, Math.min(expectedSize, storedSegment.byteSize())));
     }
 
     @Override
     public void delete(byte[] key) {
-        simulatedStorage.remove(new String(key));
+        index.remove(new String(key));
+        // In a real LSM, we'd add a tombstone. Here we just remove from index.
+        // Memory is reclaimed when the storageArena is closed.
     }
 
     @Override
     public void flush() {
-        // HelixDB sync to disk
+        // HelixDB sync to disk (noop for now)
     }
 
     @Override
     public void close() {
-        simulatedStorage.clear();
+        index.clear();
+        storageArena.close();
     }
 }
