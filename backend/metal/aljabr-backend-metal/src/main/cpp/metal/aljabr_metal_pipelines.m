@@ -78,6 +78,10 @@ void aljabr_metal_compile_runtime_pipelines(AljabrMetalPipelines* pipelines) {
     pipelines->gelu_ffn = compile_pipeline(library, @"aljabr_gelu_ffn_kernel");
     pipelines->rmsnorm = compile_pipeline(library, @"aljabr_rmsnorm_kernel");
     pipelines->rmsnorm_rows = compile_pipeline(library, @"aljabr_rmsnorm_rows_kernel");
+    pipelines->layernorm = compile_pipeline(library, @"aljabr_layernorm_kernel");
+    pipelines->layernorm_rows = compile_pipeline(library, @"aljabr_layernorm_rows_kernel");
+    pipelines->silu = compile_pipeline(library, @"aljabr_silu_kernel");
+    pipelines->gelu = compile_pipeline(library, @"aljabr_gelu_kernel");
     pipelines->softmax = compile_pipeline(library, @"aljabr_softmax_kernel");
     pipelines->softmax_rows = compile_pipeline(library, @"aljabr_softmax_rows_kernel");
     pipelines->matvec_half = compile_pipeline(library, @"aljabr_matvec_tb_half_kernel");

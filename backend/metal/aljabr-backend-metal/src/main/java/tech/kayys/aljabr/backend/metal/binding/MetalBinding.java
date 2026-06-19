@@ -84,6 +84,10 @@ public class MetalBinding {
     private static final String FN_ATTENTION_GQA_WINDOWED = "aljabr_metal_attention_gqa_windowed";
     private static final String FN_RMSNORM = "aljabr_metal_rmsnorm";
     private static final String FN_RMSNORM_ROWS = "aljabr_metal_rmsnorm_rows";
+    private static final String FN_LAYERNORM = "aljabr_metal_layernorm";
+    private static final String FN_LAYERNORM_ROWS = "aljabr_metal_layernorm_rows";
+    private static final String FN_SILU = "aljabr_metal_silu";
+    private static final String FN_GELU = "aljabr_metal_gelu";
     private static final String FN_SOFTMAX = "aljabr_metal_softmax";
     private static final String FN_SILU_FFN = "aljabr_metal_silu_ffn";
     private static final String FN_GELU_FFN = "aljabr_metal_gelu_ffn";
@@ -959,6 +963,34 @@ public class MetalBinding {
         return (int) invoke(FN_RMSNORM_ROWS, out, x, weight, rows, N, eps, addOne ? 1 : 0);
     }
 
+    public int layerNorm(MemorySegment out, MemorySegment x,
+            MemorySegment weight, MemorySegment bias, int N, float eps) {
+        if (!nativeAvailable || !handles.containsKey(FN_LAYERNORM))
+            return MetalCpuFallback.layerNorm(out, x, weight, bias, N, eps);
+        return (int) invoke(FN_LAYERNORM, out, x, weight, bias, N, eps);
+    }
+
+    public int layerNormRows(MemorySegment out, MemorySegment x,
+            MemorySegment weight, MemorySegment bias, int rows, int N, float eps) {
+        if (rows <= 0 || N <= 0) {
+            return 0;
+        }
+        if (!nativeAvailable || !handles.containsKey(FN_LAYERNORM_ROWS)) {
+            long rowBytes = (long) N * Float.BYTES;
+            for (int row = 0; row < rows; row++) {
+                int rc = MetalCpuFallback.layerNorm(
+                        out.asSlice((long) row * rowBytes, rowBytes),
+                        x.asSlice((long) row * rowBytes, rowBytes),
+                        weight, bias, N, eps);
+                if (rc != 0) {
+                    return rc;
+                }
+            }
+            return 0;
+        }
+        return (int) invoke(FN_LAYERNORM_ROWS, out, x, weight, bias, rows, N, eps);
+    }
+
     /**
      * SiLU-gated FFN: out = silu(gate) * up
      * 
@@ -996,6 +1028,18 @@ public class MetalBinding {
         if (!nativeAvailable || !handles.containsKey(FN_GELU_FFN))
             return MetalCpuFallback.geluFfn(out, gate, up, N);
         return (int) invoke(FN_GELU_FFN, out, gate, up, N);
+    }
+
+    public int silu(MemorySegment out, MemorySegment x, int N) {
+        if (!nativeAvailable || !handles.containsKey(FN_SILU))
+            return MetalCpuFallback.silu(out, x, N);
+        return (int) invoke(FN_SILU, out, x, N);
+    }
+
+    public int gelu(MemorySegment out, MemorySegment x, int N) {
+        if (!nativeAvailable || !handles.containsKey(FN_GELU))
+            return MetalCpuFallback.gelu(out, x, N);
+        return (int) invoke(FN_GELU, out, x, N);
     }
 
     // ── Basic Math API ────────────────────────────────────────────────────────
@@ -1302,6 +1346,20 @@ public class MetalBinding {
         bind(FN_RMSNORM_ROWS, FunctionDescriptor.of(ValueLayout.JAVA_INT,
                 ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
                 ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_FLOAT, ValueLayout.JAVA_INT));
+
+        bind(FN_LAYERNORM, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
+                ValueLayout.JAVA_INT, ValueLayout.JAVA_FLOAT));
+
+        bind(FN_LAYERNORM_ROWS, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
+                ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_FLOAT));
+
+        bind(FN_SILU, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+
+        bind(FN_GELU, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
 
         // int aljabr_metal_silu_ffn(out, gate, up, N)
         bind(FN_SILU_FFN, FunctionDescriptor.of(ValueLayout.JAVA_INT,

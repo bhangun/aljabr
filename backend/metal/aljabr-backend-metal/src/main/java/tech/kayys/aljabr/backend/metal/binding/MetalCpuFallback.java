@@ -175,6 +175,26 @@ final class MetalCpuFallback {
         return 0;
     }
 
+    static int layerNorm(MemorySegment out, MemorySegment x,
+            MemorySegment weight, MemorySegment bias, int N, float eps) {
+        float sum = 0f;
+        float sumSq = 0f;
+        for (int i = 0; i < N; i++) {
+            float v = get(x, i);
+            sum += v;
+            sumSq += v * v;
+        }
+        float mean = sum / N;
+        float variance = (sumSq / N) - (mean * mean);
+        float inv = 1f / (float) Math.sqrt(variance + eps);
+        for (int i = 0; i < N; i++) {
+            float w = weight != null ? get(weight, i) : 1.0f;
+            float b = bias != null ? get(bias, i) : 0.0f;
+            set(out, i, (get(x, i) - mean) * inv * w + b);
+        }
+        return 0;
+    }
+
     // ── SiLU FFN ──────────────────────────────────────────────────────────────
 
     static int siluFfn(MemorySegment out, MemorySegment gate,
@@ -193,6 +213,24 @@ final class MetalCpuFallback {
             float inner = 0.79788456f * (g + 0.044715f * g * g * g);
             float gelu = 0.5f * g * (1f + (float) Math.tanh(inner));
             set(out, i, gelu * get(up, i));
+        }
+        return 0;
+    }
+
+    static int silu(MemorySegment out, MemorySegment x, int N) {
+        for (int i = 0; i < N; i++) {
+            float g = get(x, i);
+            set(out, i, (g / (1f + (float) Math.exp(-g))));
+        }
+        return 0;
+    }
+
+    static int gelu(MemorySegment out, MemorySegment x, int N) {
+        for (int i = 0; i < N; i++) {
+            float g = get(x, i);
+            float inner = 0.79788456f * (g + 0.044715f * g * g * g);
+            float gelu = 0.5f * g * (1f + (float) Math.tanh(inner));
+            set(out, i, gelu);
         }
         return 0;
     }

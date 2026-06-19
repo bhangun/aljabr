@@ -128,6 +128,7 @@ public class MetalComputeBackend implements ComputeBackend {
         int B = (int) Q.shape().dim(0);
         int T = (int) Q.shape().dim(1);
         int H = (int) Q.shape().dim(2);
+        int Hkv = (int) K.shape().dim(2);
         int D = (int) Q.shape().dim(3);
 
         Shape shapeOut = Q.shape();
@@ -135,8 +136,14 @@ public class MetalComputeBackend implements ComputeBackend {
         CpuBuffer bufferOut = allocate(sizeBytes);
 
         MemorySegment empty = MemorySegment.NULL;
-        int status = metalBinding.attention(bufferOut.segment(), dQ.buffer().segment(), dK.buffer().segment(), dV.buffer().segment(),
-                empty, empty, B, T, H, D, 16, 1024, (float)(1.0/Math.sqrt(D)), 1, 0.0f);
+        int status;
+        if (H == Hkv) {
+            status = metalBinding.attention(bufferOut.segment(), dQ.buffer().segment(), dK.buffer().segment(), dV.buffer().segment(),
+                    empty, empty, B, T, H, D, 16, 1024, (float)(1.0/Math.sqrt(D)), 1, 0.0f);
+        } else {
+            status = metalBinding.attentionGqa(bufferOut.segment(), dQ.buffer().segment(), dK.buffer().segment(), dV.buffer().segment(),
+                    empty, empty, B, T, H, Hkv, D, 16, 1024, (float)(1.0/Math.sqrt(D)), 1, 0.0f);
+        }
 
         if (status != 0) {
             return cpuFallback.attention(Q, K, V);
@@ -222,7 +229,19 @@ public class MetalComputeBackend implements ComputeBackend {
 
     @Override
     public Tensor silu(Tensor a) {
-        return cpuFallback.silu(a);
+        if (!isNative || a.dtype() != DType.F32) return cpuFallback.silu(a);
+        
+        DefaultTensor da = asDefault(a);
+        Shape shape = a.shape();
+        int n = (int) shape.numel();
+        CpuBuffer bufferOut = allocate(n * 4);
+        
+        int status = metalBinding.silu(bufferOut.segment(), da.buffer().segment(), n);
+        if (status != 0) {
+            return cpuFallback.silu(a);
+        }
+        
+        return new DefaultTensor(shape, a.dtype(), a.device(), bufferOut, this);
     }
 
     @Override
@@ -241,7 +260,21 @@ public class MetalComputeBackend implements ComputeBackend {
     public Tensor transpose(Tensor a, int d0, int d1) { return cpuFallback.transpose(a, d0, d1); }
 
     @Override
-    public Tensor gelu(Tensor a) { return cpuFallback.gelu(a); }
+    public Tensor gelu(Tensor a) {
+        if (!isNative || a.dtype() != DType.F32) return cpuFallback.gelu(a);
+        
+        DefaultTensor da = asDefault(a);
+        Shape shape = a.shape();
+        int n = (int) shape.numel();
+        CpuBuffer bufferOut = allocate(n * 4);
+        
+        int status = metalBinding.gelu(bufferOut.segment(), da.buffer().segment(), n);
+        if (status != 0) {
+            return cpuFallback.gelu(a);
+        }
+        
+        return new DefaultTensor(shape, a.dtype(), a.device(), bufferOut, this);
+    }
 
     @Override
     public Tensor softmax(Tensor a, int dim) {
@@ -281,7 +314,40 @@ public class MetalComputeBackend implements ComputeBackend {
 
     @Override
     public Tensor layerNorm(Tensor input, long[] normalizedShape, Tensor weight, Tensor bias, float eps) {
-        return cpuFallback.layerNorm(input, normalizedShape, weight, bias, eps);
+        if (!isNative || input.dtype() != DType.F32) return cpuFallback.layerNorm(input, normalizedShape, weight, bias, eps);
+
+        DefaultTensor dInput = asDefault(input);
+        DefaultTensor dWeight = weight != null ? asDefault(weight) : null;
+        DefaultTensor dBias = bias != null ? asDefault(bias) : null;
+
+        Shape shape = input.shape();
+        long sizeBytes = shape.numel() * byteSize(input.dtype());
+        CpuBuffer bufferOut = allocate(sizeBytes);
+        
+        int n = 1;
+        for (long s : normalizedShape) {
+            n *= s;
+        }
+        int rows = (int) (shape.numel() / n);
+
+        int status;
+        if (rows == 1) {
+            status = metalBinding.layerNorm(bufferOut.segment(), dInput.buffer().segment(),
+                    dWeight != null ? dWeight.buffer().segment() : MemorySegment.NULL,
+                    dBias != null ? dBias.buffer().segment() : MemorySegment.NULL,
+                    n, eps);
+        } else {
+            status = metalBinding.layerNormRows(bufferOut.segment(), dInput.buffer().segment(),
+                    dWeight != null ? dWeight.buffer().segment() : MemorySegment.NULL,
+                    dBias != null ? dBias.buffer().segment() : MemorySegment.NULL,
+                    rows, n, eps);
+        }
+
+        if (status != 0) {
+            return cpuFallback.layerNorm(input, normalizedShape, weight, bias, eps);
+        }
+
+        return new DefaultTensor(shape, input.dtype(), input.device(), bufferOut, this);
     }
 
     @Override

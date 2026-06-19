@@ -38,8 +38,54 @@ public class GraphOptimizer {
             }
         }
         
-        // Return a potentially new node if inputs changed, or the same node if no rules match.
-        // For simplicity in this initial implementation, we just return a new node if inputs changed.
+        // Flash Attention Fusion Rule: MATMUL(SOFTMAX(DIV_SCALAR(MATMUL(Q, TRANSPOSE(K)), scale)), V) -> ATTENTION(Q, K, V)
+        if (node.getOp() == OpType.MATMUL && newInputs.size() == 2) {
+            GraphNode maybeSoftmax = newInputs.get(0);
+            GraphNode V = newInputs.get(1);
+
+            if (maybeSoftmax.getOp() == OpType.SOFTMAX && maybeSoftmax.getInputs().size() == 1) {
+                GraphNode maybeDiv = maybeSoftmax.getInputs().get(0);
+
+                if ((maybeDiv.getOp() == OpType.DIV_SCALAR || maybeDiv.getOp() == OpType.MUL_SCALAR) && maybeDiv.getInputs().size() == 1) {
+                    GraphNode maybeMatmul = maybeDiv.getInputs().get(0);
+
+                    if (maybeMatmul.getOp() == OpType.MATMUL && maybeMatmul.getInputs().size() == 2) {
+                        GraphNode Q = maybeMatmul.getInputs().get(0);
+                        GraphNode maybeTranspose = maybeMatmul.getInputs().get(1);
+
+                        if (maybeTranspose.getOp() == OpType.TRANSPOSE && maybeTranspose.getInputs().size() == 1) {
+                            GraphNode K = maybeTranspose.getInputs().get(0);
+
+                            // We've found the full pattern! Fuse it into ATTENTION
+                            GraphNode fusedNode = new GraphNode(
+                                    OpType.ATTENTION, 
+                                    java.util.List.of(Q, K, V), 
+                                    new Object[0], 
+                                    node.getOutputShape(), 
+                                    node.getOutputDType()
+                            );
+                            memo.put(node, fusedNode);
+                            return fusedNode;
+                        }
+                    }
+                }
+            }
+        }
+
+        boolean inputsChanged = false;
+        for (int i = 0; i < node.getInputs().size(); i++) {
+            if (node.getInputs().get(i) != newInputs.get(i)) {
+                inputsChanged = true;
+                break;
+            }
+        }
+
+        if (!inputsChanged) {
+            memo.put(node, node);
+            return node;
+        }
+
+        // Return a new node if inputs changed.
         GraphNode optimized = new GraphNode(node.getOp(), newInputs, node.getArgs(), node.getOutputShape(), node.getOutputDType());
         if (node.isEvaluated()) {
             optimized.setMaterializedData(node.getMaterializedData());

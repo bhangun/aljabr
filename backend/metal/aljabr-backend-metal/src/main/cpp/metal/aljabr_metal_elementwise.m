@@ -238,3 +238,142 @@ int aljabr_metal_gelu_ffn(void* out, const void* gate, const void* up, int N) {
         return cmd.error == nil ? 0 : -5;
     }
 }
+
+static int cpu_layernorm_rows(void* out, const void* x, const void* weight, const void* bias,
+                              int rows, int N, float eps) {
+    size_t row_bytes = (size_t)N * sizeof(float);
+    for (int row = 0; row < rows; row++) {
+        int rc = aljabr_metal_cpu_layernorm((char*)out + ((size_t)row * row_bytes),
+                (const char*)x + ((size_t)row * row_bytes), weight, bias, N, eps);
+        if (rc != 0) return rc;
+    }
+    return 0;
+}
+
+int aljabr_metal_layernorm(void* out, const void* x, const void* weight, const void* bias, int N, float eps) {
+    AljabrMetalPipelines* pipelines = aljabr_metal_pipelines();
+    if (!g_initialized || N <= 0) return aljabr_metal_cpu_layernorm(out, x, weight, bias, N, eps);
+    if (!g_elementwise_enabled || pipelines->layernorm == nil
+            || pipelines->layernorm.maxTotalThreadsPerThreadgroup < 256) {
+        return aljabr_metal_cpu_layernorm(out, x, weight, bias, N, eps);
+    }
+
+    @autoreleasepool {
+        id<MTLBuffer> bufOut = wrap_ptr(out, (size_t)N * sizeof(float));
+        id<MTLBuffer> bufX = wrap_ptr((void*)x, (size_t)N * sizeof(float));
+        id<MTLBuffer> bufWeight = weight ? wrap_ptr((void*)weight, (size_t)N * sizeof(float)) : nil;
+        id<MTLBuffer> bufBias = bias ? wrap_ptr((void*)bias, (size_t)N * sizeof(float)) : nil;
+        if (bufOut == nil || bufX == nil || (weight != NULL && bufWeight == nil) || (bias != NULL && bufBias == nil)) {
+            return aljabr_metal_cpu_layernorm(out, x, weight, bias, N, eps);
+        }
+
+        unsigned int n = (unsigned int)N;
+        id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:pipelines->layernorm];
+        [enc setBuffer:bufOut offset:0 atIndex:0];
+        [enc setBuffer:bufX offset:0 atIndex:1];
+        if (bufWeight != nil) [enc setBuffer:bufWeight offset:0 atIndex:2];
+        if (bufBias != nil) [enc setBuffer:bufBias offset:0 atIndex:3];
+        [enc setBytes:&n length:sizeof(n) atIndex:4];
+        [enc setBytes:&eps length:sizeof(eps) atIndex:5];
+        [enc dispatchThreadgroups:MTLSizeMake(1, 1, 1)
+             threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+        [enc endEncoding];
+        [cmd commit];
+        [cmd waitUntilCompleted];
+        return cmd.error == nil ? 0 : -5;
+    }
+}
+
+int aljabr_metal_layernorm_rows(void* out, const void* x, const void* weight, const void* bias,
+                                int rows, int N, float eps) {
+    AljabrMetalPipelines* pipelines = aljabr_metal_pipelines();
+    if (rows <= 0 || N <= 0) return 0;
+    if (!g_initialized || !g_elementwise_enabled || pipelines->layernorm_rows == nil
+            || pipelines->layernorm_rows.maxTotalThreadsPerThreadgroup < 256) {
+        return cpu_layernorm_rows(out, x, weight, bias, rows, N, eps);
+    }
+
+    @autoreleasepool {
+        size_t elements = (size_t)rows * (size_t)N;
+        id<MTLBuffer> bufOut = wrap_ptr(out, elements * sizeof(float));
+        id<MTLBuffer> bufX = wrap_ptr((void*)x, elements * sizeof(float));
+        id<MTLBuffer> bufWeight = weight ? wrap_ptr((void*)weight, (size_t)N * sizeof(float)) : nil;
+        id<MTLBuffer> bufBias = bias ? wrap_ptr((void*)bias, (size_t)N * sizeof(float)) : nil;
+        if (bufOut == nil || bufX == nil || (weight != NULL && bufWeight == nil) || (bias != NULL && bufBias == nil)) {
+            return cpu_layernorm_rows(out, x, weight, bias, rows, N, eps);
+        }
+
+        unsigned int n = (unsigned int)N;
+        id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:pipelines->layernorm_rows];
+        [enc setBuffer:bufOut offset:0 atIndex:0];
+        [enc setBuffer:bufX offset:0 atIndex:1];
+        if (bufWeight != nil) [enc setBuffer:bufWeight offset:0 atIndex:2];
+        if (bufBias != nil) [enc setBuffer:bufBias offset:0 atIndex:3];
+        [enc setBytes:&n length:sizeof(n) atIndex:4];
+        [enc setBytes:&eps length:sizeof(eps) atIndex:5];
+        [enc dispatchThreadgroups:MTLSizeMake((NSUInteger)rows, 1, 1)
+             threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+        [enc endEncoding];
+        [cmd commit];
+        [cmd waitUntilCompleted];
+        return cmd.error == nil ? 0 : -5;
+    }
+}
+
+int aljabr_metal_silu(void* out, const void* x, int N) {
+    AljabrMetalPipelines* pipelines = aljabr_metal_pipelines();
+    if (!g_initialized || N <= 0) return aljabr_metal_cpu_silu(out, x, N);
+    if (!g_elementwise_enabled || pipelines->silu == nil) return aljabr_metal_cpu_silu(out, x, N);
+
+    @autoreleasepool {
+        id<MTLBuffer> bufOut = wrap_ptr(out, (size_t)N * sizeof(float));
+        id<MTLBuffer> bufX = wrap_ptr((void*)x, (size_t)N * sizeof(float));
+        if (bufOut == nil || bufX == nil) return aljabr_metal_cpu_silu(out, x, N);
+
+        unsigned int n = (unsigned int)N;
+        id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:pipelines->silu];
+        [enc setBuffer:bufOut offset:0 atIndex:0];
+        [enc setBuffer:bufX offset:0 atIndex:1];
+        [enc setBytes:&n length:sizeof(n) atIndex:2];
+        NSUInteger threads = MIN((NSUInteger)256, pipelines->silu.maxTotalThreadsPerThreadgroup);
+        [enc dispatchThreads:MTLSizeMake((NSUInteger)N, 1, 1)
+       threadsPerThreadgroup:MTLSizeMake(threads, 1, 1)];
+        [enc endEncoding];
+        [cmd commit];
+        [cmd waitUntilCompleted];
+        return cmd.error == nil ? 0 : -5;
+    }
+}
+
+int aljabr_metal_gelu(void* out, const void* x, int N) {
+    AljabrMetalPipelines* pipelines = aljabr_metal_pipelines();
+    if (!g_initialized || N <= 0) return aljabr_metal_cpu_gelu(out, x, N);
+    if (!g_elementwise_enabled || pipelines->gelu == nil) return aljabr_metal_cpu_gelu(out, x, N);
+
+    @autoreleasepool {
+        id<MTLBuffer> bufOut = wrap_ptr(out, (size_t)N * sizeof(float));
+        id<MTLBuffer> bufX = wrap_ptr((void*)x, (size_t)N * sizeof(float));
+        if (bufOut == nil || bufX == nil) return aljabr_metal_cpu_gelu(out, x, N);
+
+        unsigned int n = (unsigned int)N;
+        id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:pipelines->gelu];
+        [enc setBuffer:bufOut offset:0 atIndex:0];
+        [enc setBuffer:bufX offset:0 atIndex:1];
+        [enc setBytes:&n length:sizeof(n) atIndex:2];
+        NSUInteger threads = MIN((NSUInteger)256, pipelines->gelu.maxTotalThreadsPerThreadgroup);
+        [enc dispatchThreads:MTLSizeMake((NSUInteger)N, 1, 1)
+       threadsPerThreadgroup:MTLSizeMake(threads, 1, 1)];
+        [enc endEncoding];
+        [cmd commit];
+        [cmd waitUntilCompleted];
+        return cmd.error == nil ? 0 : -5;
+    }
+}

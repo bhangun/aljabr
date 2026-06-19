@@ -30,6 +30,13 @@ public class CudaBinding {
     private static final String FN_CUBLAS_DESTROY = "cublasDestroy_v2";
     private static final String FN_CUBLAS_SGEMM = "cublasSgemm_v2";
 
+    // Custom Kernels
+    private static final String FN_SILU = "aljabr_cuda_silu";
+    private static final String FN_GELU = "aljabr_cuda_gelu";
+    private static final String FN_LAYERNORM = "aljabr_cuda_layernorm";
+    private static final String FN_LAYERNORM_ROWS = "aljabr_cuda_layernorm_rows";
+    private static final String FN_SOFTMAX = "aljabr_cuda_softmax";
+
     // cudaMemcpyKind
     public static final int cudaMemcpyHostToHost = 0;
     public static final int cudaMemcpyHostToDevice = 1;
@@ -43,12 +50,14 @@ public class CudaBinding {
 
     private final SymbolLookup cudartLookup;
     private final SymbolLookup cublasLookup;
+    private final SymbolLookup customLookup;
     private final Map<String, MethodHandle> handles = new ConcurrentHashMap<>();
     private final boolean nativeAvailable;
 
-    private CudaBinding(SymbolLookup cudart, SymbolLookup cublas) {
+    private CudaBinding(SymbolLookup cudart, SymbolLookup cublas, SymbolLookup custom) {
         this.cudartLookup = cudart;
         this.cublasLookup = cublas;
+        this.customLookup = custom;
         this.nativeAvailable = (cudart != null && cublas != null);
         if (nativeAvailable) {
             bindAll();
@@ -62,8 +71,17 @@ public class CudaBinding {
             // Attempt to load system libraries
             System.loadLibrary("cudart");
             System.loadLibrary("cublas");
+            
+            SymbolLookup custom = null;
+            try {
+                System.loadLibrary("aljabr_cuda");
+                custom = SymbolLookup.loaderLookup();
+            } catch (Throwable e) {
+                LOG.warn("CudaBinding: Custom libaljabr_cuda.so not found, custom kernels disabled.");
+            }
+            
             SymbolLookup lk = SymbolLookup.loaderLookup();
-            instance = new CudaBinding(lk, lk);
+            instance = new CudaBinding(lk, lk, custom != null ? custom : lk);
             LOG.info("CudaBinding loaded libcudart and libcublas via system library path.");
             return true;
         } catch (Throwable e) {
@@ -71,12 +89,12 @@ public class CudaBinding {
             try {
                 SymbolLookup cudart = SymbolLookup.libraryLookup(Path.of("/usr/local/cuda/lib64/libcudart.so"), Arena.global());
                 SymbolLookup cublas = SymbolLookup.libraryLookup(Path.of("/usr/local/cuda/lib64/libcublas.so"), Arena.global());
-                instance = new CudaBinding(cudart, cublas);
+                instance = new CudaBinding(cudart, cublas, cudart); // fallback for custom is empty/cudart
                 LOG.info("CudaBinding loaded libcudart and libcublas via explicit paths.");
                 return true;
             } catch (Throwable e2) {
                 LOG.warnf("CudaBinding: explicit libraries not found (%s). CPU fallback active.", e2.getMessage());
-                instance = new CudaBinding(null, null);
+                instance = new CudaBinding(null, null, null);
                 return false;
             }
         }
@@ -85,7 +103,7 @@ public class CudaBinding {
     public static void initializeFallback() {
         if (instance != null)
             return;
-        instance = new CudaBinding(null, null);
+        instance = new CudaBinding(null, null, null);
         LOG.info("CudaBinding: CPU fallback mode");
     }
 
@@ -187,6 +205,31 @@ public class CudaBinding {
         }
     }
 
+    public int silu(MemorySegment out, MemorySegment x, int N) {
+        if (!nativeAvailable || !handles.containsKey(FN_SILU)) return -1;
+        return (int) invoke(FN_SILU, out, x, N);
+    }
+
+    public int gelu(MemorySegment out, MemorySegment x, int N) {
+        if (!nativeAvailable || !handles.containsKey(FN_GELU)) return -1;
+        return (int) invoke(FN_GELU, out, x, N);
+    }
+
+    public int layerNorm(MemorySegment out, MemorySegment x, MemorySegment weight, MemorySegment bias, int N, float eps) {
+        if (!nativeAvailable || !handles.containsKey(FN_LAYERNORM)) return -1;
+        return (int) invoke(FN_LAYERNORM, out, x, weight, bias, N, eps);
+    }
+
+    public int layerNormRows(MemorySegment out, MemorySegment x, MemorySegment weight, MemorySegment bias, int rows, int N, float eps) {
+        if (!nativeAvailable || !handles.containsKey(FN_LAYERNORM_ROWS)) return -1;
+        return (int) invoke(FN_LAYERNORM_ROWS, out, x, weight, bias, rows, N, eps);
+    }
+
+    public int softmax(MemorySegment out, MemorySegment x, int rows, int N) {
+        if (!nativeAvailable || !handles.containsKey(FN_SOFTMAX)) return -1;
+        return (int) invoke(FN_SOFTMAX, out, x, rows, N);
+    }
+
     // ── FFM binding ───────────────────────────────────────────────────────────
 
     private void bindAll() {
@@ -213,6 +256,21 @@ public class CudaBinding {
                 ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT,
                 ValueLayout.ADDRESS, ValueLayout.JAVA_INT,
                 ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+
+        if (customLookup != null) {
+            bind(customLookup, FN_SILU, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+            bind(customLookup, FN_GELU, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+            bind(customLookup, FN_LAYERNORM, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT, ValueLayout.JAVA_FLOAT));
+            bind(customLookup, FN_LAYERNORM_ROWS, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_FLOAT));
+            bind(customLookup, FN_SOFTMAX, FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+        }
     }
 
     private void bind(SymbolLookup lookup, String name, FunctionDescriptor descriptor) {

@@ -221,3 +221,53 @@ int aljabr_metal_cpu_gelu_ffn(void* out, const void* gate, const void* up, int N
     }
     return 0;
 }
+
+int aljabr_metal_cpu_layernorm(void* out, const void* x, const void* weight, const void* bias, int N, float eps) {
+    const float* xi = (const float*)x;
+    const float* wi = (const float*)weight;
+    const float* bi = (const float*)bias;
+    float* oi = (float*)out;
+    float s = 0;
+    float ss = 0;
+    for (int i = 0; i < N; i++) {
+        float v = xi[i];
+        s += v;
+        ss += v * v;
+    }
+    float mean = s / N;
+    float variance = (ss / N) - (mean * mean);
+    float inv = 1.0f / sqrtf(variance + eps);
+    for (int i = 0; i < N; i++) {
+        float w = wi ? wi[i] : 1.0f;
+        float b = bi ? bi[i] : 0.0f;
+        oi[i] = (xi[i] - mean) * inv * w + b;
+    }
+    return 0;
+}
+
+int aljabr_metal_cpu_silu(void* out, const void* x, int N) {
+    const float* xi = (const float*)x;
+    float* oi = (float*)out;
+    for (int i = 0; i < N; i++) {
+        float g = xi[i];
+        if (g <= -20.0f) oi[i] = 0.0f;
+        else if (g >= 20.0f) oi[i] = g;
+        else oi[i] = g / (1.0f + expf(-g));
+    }
+    return 0;
+}
+
+int aljabr_metal_cpu_gelu(void* out, const void* x, int N) {
+    const float* xi = (const float*)x;
+    float* oi = (float*)out;
+    for (int i = 0; i < N; i++) {
+        float g = xi[i];
+        if (g <= -10.0f) oi[i] = 0.0f;
+        else if (g >= 10.0f) oi[i] = g;
+        else {
+            float inner = 0.79788456f * (g + 0.044715f * g * g * g);
+            oi[i] = 0.5f * g * (1.0f + tanhf(inner));
+        }
+    }
+    return 0;
+}

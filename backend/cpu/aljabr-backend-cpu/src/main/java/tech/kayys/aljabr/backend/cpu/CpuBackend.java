@@ -553,9 +553,24 @@ public final class CpuBackend implements ComputeBackend {
 
     @Override
     public Tensor cast(Tensor a, DType dtype) {
-        // For now: F32 → F32 is a no-op (further dtypes need quantize ops)
         if (a.dtype() == dtype) return a;
-        throw new UnsupportedOperationException("cast to " + dtype + " not yet implemented in CpuBackend");
+        
+        long n = a.numel();
+        CpuBuffer outBuf = allocate(dtype.memoryFootprintBytes(n));
+        
+        if (a.dtype() == DType.F32 && dtype == DType.Q8_0) {
+            tech.kayys.aljabr.backend.cpu.ops.QuantizeOps.quantizeQ8_0(seg(a), outBuf.segment(), n);
+        } else if (a.dtype() == DType.F32 && dtype == DType.Q4_0) {
+            tech.kayys.aljabr.backend.cpu.ops.QuantizeOps.quantizeQ4_0(seg(a), outBuf.segment(), n);
+        } else if (a.dtype() == DType.Q8_0 && dtype == DType.F32) {
+            tech.kayys.aljabr.backend.cpu.ops.DequantizeOps.dequantizeQ8_0(seg(a), outBuf.segment(), n);
+        } else if (a.dtype() == DType.Q4_0 && dtype == DType.F32) {
+            tech.kayys.aljabr.backend.cpu.ops.DequantizeOps.dequantizeQ4_0(seg(a), outBuf.segment(), n);
+        } else {
+            throw new UnsupportedOperationException("cast from " + a.dtype() + " to " + dtype + " not supported yet");
+        }
+        
+        return new DefaultTensor(a.shape(), dtype, a.device(), outBuf, this);
     }
 
     @Override

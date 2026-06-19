@@ -158,7 +158,32 @@ public class CUDABackend implements ComputeBackend {
     public Tensor attention(Tensor Q, Tensor K, Tensor V) { return cpuFallback.attention(Q, K, V); }
 
     @Override
-    public Tensor softmax(Tensor a) { return cpuFallback.softmax(a); }
+    public Tensor softmax(Tensor a) {
+        if (!isNative || a.dtype() != DType.F32) return cpuFallback.softmax(a);
+        
+        DefaultTensor da = asDefault(a);
+        Shape shape = a.shape();
+        int n = (int) shape.numel();
+        long sizeBytes = n * byteSize(a.dtype());
+        
+        MemorySegment d_in = cudaBinding.cudaMalloc(sizeBytes);
+        MemorySegment d_out = cudaBinding.cudaMalloc(sizeBytes);
+        cudaBinding.cudaMemcpy(d_in, da.buffer().segment(), sizeBytes, CudaBinding.cudaMemcpyHostToDevice);
+        
+        int status = cudaBinding.softmax(d_out, d_in, 1, n);
+        if (status != 0) {
+            cudaBinding.cudaFree(d_in);
+            cudaBinding.cudaFree(d_out);
+            return cpuFallback.softmax(a);
+        }
+        
+        CpuBuffer bufferOut = allocate(sizeBytes);
+        cudaBinding.cudaMemcpy(bufferOut.segment(), d_out, sizeBytes, CudaBinding.cudaMemcpyDeviceToHost);
+        cudaBinding.cudaFree(d_in);
+        cudaBinding.cudaFree(d_out);
+        
+        return new DefaultTensor(shape, a.dtype(), a.device(), bufferOut, this);
+    }
 
     @Override
     public Tensor slice(Tensor a, long[] offsets, long[] sizes) { return cpuFallback.slice(a, offsets, sizes); }
@@ -214,7 +239,32 @@ public class CUDABackend implements ComputeBackend {
     public Tensor exp(Tensor a) { return cpuFallback.exp(a); }
 
     @Override
-    public Tensor silu(Tensor a) { return cpuFallback.silu(a); }
+    public Tensor silu(Tensor a) {
+        if (!isNative || a.dtype() != DType.F32) return cpuFallback.silu(a);
+        
+        DefaultTensor da = asDefault(a);
+        Shape shape = a.shape();
+        int n = (int) shape.numel();
+        long sizeBytes = n * byteSize(a.dtype());
+        
+        MemorySegment d_in = cudaBinding.cudaMalloc(sizeBytes);
+        MemorySegment d_out = cudaBinding.cudaMalloc(sizeBytes);
+        cudaBinding.cudaMemcpy(d_in, da.buffer().segment(), sizeBytes, CudaBinding.cudaMemcpyHostToDevice);
+        
+        int status = cudaBinding.silu(d_out, d_in, n);
+        if (status != 0) {
+            cudaBinding.cudaFree(d_in);
+            cudaBinding.cudaFree(d_out);
+            return cpuFallback.silu(a);
+        }
+        
+        CpuBuffer bufferOut = allocate(sizeBytes);
+        cudaBinding.cudaMemcpy(bufferOut.segment(), d_out, sizeBytes, CudaBinding.cudaMemcpyDeviceToHost);
+        cudaBinding.cudaFree(d_in);
+        cudaBinding.cudaFree(d_out);
+        
+        return new DefaultTensor(shape, a.dtype(), a.device(), bufferOut, this);
+    }
 
     @Override
     public Tensor flatten(Tensor a) { return cpuFallback.flatten(a); }
@@ -232,7 +282,32 @@ public class CUDABackend implements ComputeBackend {
     public Tensor transpose(Tensor a, int d0, int d1) { return cpuFallback.transpose(a, d0, d1); }
 
     @Override
-    public Tensor gelu(Tensor a) { return cpuFallback.gelu(a); }
+    public Tensor gelu(Tensor a) {
+        if (!isNative || a.dtype() != DType.F32) return cpuFallback.gelu(a);
+        
+        DefaultTensor da = asDefault(a);
+        Shape shape = a.shape();
+        int n = (int) shape.numel();
+        long sizeBytes = n * byteSize(a.dtype());
+        
+        MemorySegment d_in = cudaBinding.cudaMalloc(sizeBytes);
+        MemorySegment d_out = cudaBinding.cudaMalloc(sizeBytes);
+        cudaBinding.cudaMemcpy(d_in, da.buffer().segment(), sizeBytes, CudaBinding.cudaMemcpyHostToDevice);
+        
+        int status = cudaBinding.gelu(d_out, d_in, n);
+        if (status != 0) {
+            cudaBinding.cudaFree(d_in);
+            cudaBinding.cudaFree(d_out);
+            return cpuFallback.gelu(a);
+        }
+        
+        CpuBuffer bufferOut = allocate(sizeBytes);
+        cudaBinding.cudaMemcpy(bufferOut.segment(), d_out, sizeBytes, CudaBinding.cudaMemcpyDeviceToHost);
+        cudaBinding.cudaFree(d_in);
+        cudaBinding.cudaFree(d_out);
+        
+        return new DefaultTensor(shape, a.dtype(), a.device(), bufferOut, this);
+    }
 
     @Override
     public Tensor softmax(Tensor a, int dim) { return cpuFallback.softmax(a, dim); }
@@ -254,7 +329,54 @@ public class CUDABackend implements ComputeBackend {
 
     @Override
     public Tensor layerNorm(Tensor input, long[] normalizedShape, Tensor weight, Tensor bias, float eps) {
-        return cpuFallback.layerNorm(input, normalizedShape, weight, bias, eps);
+        if (!isNative || input.dtype() != DType.F32) return cpuFallback.layerNorm(input, normalizedShape, weight, bias, eps);
+
+        DefaultTensor dInput = asDefault(input);
+        DefaultTensor dWeight = weight != null ? asDefault(weight) : null;
+        DefaultTensor dBias = bias != null ? asDefault(bias) : null;
+
+        Shape shape = input.shape();
+        long sizeBytes = shape.numel() * byteSize(input.dtype());
+        
+        int n = 1;
+        for (long s : normalizedShape) {
+            n *= s;
+        }
+        int rows = (int) (shape.numel() / n);
+
+        MemorySegment d_in = cudaBinding.cudaMalloc(sizeBytes);
+        MemorySegment d_out = cudaBinding.cudaMalloc(sizeBytes);
+        MemorySegment d_weight = dWeight != null ? cudaBinding.cudaMalloc(n * 4) : MemorySegment.NULL;
+        MemorySegment d_bias = dBias != null ? cudaBinding.cudaMalloc(n * 4) : MemorySegment.NULL;
+        
+        cudaBinding.cudaMemcpy(d_in, dInput.buffer().segment(), sizeBytes, CudaBinding.cudaMemcpyHostToDevice);
+        if (d_weight != MemorySegment.NULL) cudaBinding.cudaMemcpy(d_weight, dWeight.buffer().segment(), n * 4, CudaBinding.cudaMemcpyHostToDevice);
+        if (d_bias != MemorySegment.NULL) cudaBinding.cudaMemcpy(d_bias, dBias.buffer().segment(), n * 4, CudaBinding.cudaMemcpyHostToDevice);
+
+        int status;
+        if (rows == 1) {
+            status = cudaBinding.layerNorm(d_out, d_in, d_weight, d_bias, n, eps);
+        } else {
+            status = cudaBinding.layerNormRows(d_out, d_in, d_weight, d_bias, rows, n, eps);
+        }
+
+        if (status != 0) {
+            cudaBinding.cudaFree(d_in);
+            cudaBinding.cudaFree(d_out);
+            if (d_weight != MemorySegment.NULL) cudaBinding.cudaFree(d_weight);
+            if (d_bias != MemorySegment.NULL) cudaBinding.cudaFree(d_bias);
+            return cpuFallback.layerNorm(input, normalizedShape, weight, bias, eps);
+        }
+
+        CpuBuffer bufferOut = allocate(sizeBytes);
+        cudaBinding.cudaMemcpy(bufferOut.segment(), d_out, sizeBytes, CudaBinding.cudaMemcpyDeviceToHost);
+        
+        cudaBinding.cudaFree(d_in);
+        cudaBinding.cudaFree(d_out);
+        if (d_weight != MemorySegment.NULL) cudaBinding.cudaFree(d_weight);
+        if (d_bias != MemorySegment.NULL) cudaBinding.cudaFree(d_bias);
+
+        return new DefaultTensor(shape, input.dtype(), input.device(), bufferOut, this);
     }
 
     @Override

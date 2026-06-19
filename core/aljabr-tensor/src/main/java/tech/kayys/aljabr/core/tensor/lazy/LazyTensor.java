@@ -163,40 +163,205 @@ public class LazyTensor implements Tensor {
         return op(OpType.SILU, List.of(this), new Object[0], this.shape(), this.dtype());
     }
 
-    @Override public Tensor crossEntropy(Tensor t) { throw new UnsupportedOperationException(); }
-    @Override public Tensor binaryCrossEntropy(Tensor t) { throw new UnsupportedOperationException(); }
-    @Override public Tensor dropout(float p, boolean training) { throw new UnsupportedOperationException(); }
-    @Override public Tensor slice(long[] offsets, long[] sizes) { throw new UnsupportedOperationException(); }
-    @Override public List<Tensor> split(int axis, int parts) { throw new UnsupportedOperationException(); }
-    @Override public Tensor pow(float exponent) { throw new UnsupportedOperationException(); }
-    @Override public Tensor mean() { throw new UnsupportedOperationException(); }
-    @Override public Tensor abs() { throw new UnsupportedOperationException(); }
-    @Override public Tensor cast(DType dtype) { throw new UnsupportedOperationException(); }
-    @Override public Tensor to(DeviceType device) { throw new UnsupportedOperationException(); }
-    @Override public Tensor zerosLike() { throw new UnsupportedOperationException(); }
-    @Override public Tensor sqrt() { throw new UnsupportedOperationException(); }
-    @Override public Tensor sigmoid() { throw new UnsupportedOperationException(); }
-    @Override public Tensor tanh() { throw new UnsupportedOperationException(); }
-    @Override public Tensor log() { throw new UnsupportedOperationException(); }
-    @Override public Tensor exp() { throw new UnsupportedOperationException(); }
-    @Override public Tensor flatten() { throw new UnsupportedOperationException(); }
-    @Override public Tensor unsqueeze(int dim) { throw new UnsupportedOperationException(); }
-    @Override public Tensor squeeze() { throw new UnsupportedOperationException(); }
-    @Override public Tensor transpose() { throw new UnsupportedOperationException(); }
-    @Override public Tensor transpose(int dim0, int dim1) { throw new UnsupportedOperationException(); }
-    @Override public Tensor gelu() { throw new UnsupportedOperationException(); }
-    @Override public Tensor softmax(int dim) { throw new UnsupportedOperationException(); }
-    @Override public Tensor softmax() { throw new UnsupportedOperationException(); }
-    @Override public Tensor logSoftmax(int dim) { throw new UnsupportedOperationException(); }
-    @Override public Tensor mean(int dim, boolean keepDim) { throw new UnsupportedOperationException(); }
-    @Override public Tensor sum() { throw new UnsupportedOperationException(); }
-    @Override public Tensor sum(int dim, boolean keepDim) { throw new UnsupportedOperationException(); }
-    @Override public Tensor layerNorm(long[] normalizedShape, Tensor weight, Tensor bias, float eps) { throw new UnsupportedOperationException(); }
-    @Override public Tensor rmsNorm(Tensor weight, float eps) { throw new UnsupportedOperationException(); }
-    @Override public Tensor batchNorm(Tensor weight, Tensor bias, Tensor runningMean, Tensor runningVar, boolean training, float momentum, float eps) { throw new UnsupportedOperationException(); }
-    @Override public Tensor conv2d(Tensor weight, Tensor bias, int stride, int padding, int dilation, int groups) { throw new UnsupportedOperationException(); }
-    @Override public Tensor maxPool2d(int kernelSize, int stride, int padding) { throw new UnsupportedOperationException(); }
-    @Override public Tensor adaptiveAvgPool2d(int outputH, int outputW) { throw new UnsupportedOperationException(); }
-    @Override public Tensor attention(Tensor K, Tensor V) { throw new UnsupportedOperationException(); }
-    @Override public Tensor embedding(Tensor weight, long paddingIdx) { throw new UnsupportedOperationException(); }
+    @Override
+    public Tensor crossEntropy(Tensor t) {
+        return op(OpType.CROSS_ENTROPY, List.of(this, t), new Object[0], new Shape(1), this.dtype());
+    }
+
+    @Override
+    public Tensor binaryCrossEntropy(Tensor t) {
+        return op(OpType.BINARY_CROSS_ENTROPY, List.of(this, t), new Object[0], new Shape(1), this.dtype());
+    }
+
+    @Override
+    public Tensor dropout(float p, boolean training) {
+        return op(OpType.DROPOUT, List.of(this), new Object[]{p, training}, this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor slice(long[] offsets, long[] sizes) {
+        return op(OpType.SLICE, List.of(this), new Object[]{offsets, sizes}, new Shape(sizes), this.dtype());
+    }
+
+    @Override
+    public List<Tensor> split(int axis, int parts) {
+        // Splitting a lazy tensor is tricky as it returns a list. 
+        // For simplicity, we might evaluate it first, but ideally we'd have a split node.
+        // We'll throw an exception for now as lazy lists are hard to represent without a tuple type.
+        throw new UnsupportedOperationException("Lazy split not fully supported yet.");
+    }
+
+    @Override
+    public Tensor pow(float exponent) {
+        return op(OpType.POW, List.of(this), new Object[]{exponent}, this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor mean() {
+        return op(OpType.MEAN, List.of(this), new Object[0], new Shape(1), this.dtype());
+    }
+
+    @Override
+    public Tensor abs() {
+        return op(OpType.ABS, List.of(this), new Object[0], this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor cast(DType dtype) {
+        return op(OpType.CAST, List.of(this), new Object[]{dtype}, this.shape(), dtype);
+    }
+
+    @Override
+    public Tensor to(DeviceType device) {
+        return op(OpType.TO, List.of(this), new Object[]{device}, this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor zerosLike() {
+        return op(OpType.ZEROS_LIKE, List.of(this), new Object[0], this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor sqrt() {
+        return op(OpType.SQRT, List.of(this), new Object[0], this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor sigmoid() {
+        return op(OpType.SIGMOID, List.of(this), new Object[0], this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor tanh() {
+        return op(OpType.TANH, List.of(this), new Object[0], this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor log() {
+        return op(OpType.LOG, List.of(this), new Object[0], this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor exp() {
+        return op(OpType.EXP, List.of(this), new Object[0], this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor flatten() {
+        return op(OpType.FLATTEN, List.of(this), new Object[0], new Shape(this.shape().numel()), this.dtype());
+    }
+
+    @Override
+    public Tensor unsqueeze(int dim) {
+        return op(OpType.UNSQUEEZE, List.of(this), new Object[]{dim}, this.shape() /* needs shape inference */, this.dtype());
+    }
+
+    @Override
+    public Tensor squeeze() {
+        return op(OpType.SQUEEZE, List.of(this), new Object[0], this.shape() /* needs shape inference */, this.dtype());
+    }
+
+    @Override
+    public Tensor transpose() {
+        Shape s = this.shape();
+        if (s.rank() >= 2) {
+            long[] dims = s.dims().clone();
+            long tmp = dims[dims.length - 1];
+            dims[dims.length - 1] = dims[dims.length - 2];
+            dims[dims.length - 2] = tmp;
+            s = new Shape(dims);
+        }
+        return op(OpType.TRANSPOSE, List.of(this), new Object[0], s, this.dtype());
+    }
+
+    @Override
+    public Tensor transpose(int dim0, int dim1) {
+        return op(OpType.TRANSPOSE, List.of(this), new Object[]{dim0, dim1}, this.shape() /* needs shape inference */, this.dtype());
+    }
+
+    @Override
+    public Tensor gelu() {
+        return op(OpType.GELU, List.of(this), new Object[0], this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor softmax(int dim) {
+        return op(OpType.SOFTMAX, List.of(this), new Object[]{dim}, this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor softmax() {
+        return op(OpType.SOFTMAX, List.of(this), new Object[0], this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor logSoftmax(int dim) {
+        return op(OpType.LOG_SOFTMAX, List.of(this), new Object[]{dim}, this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor mean(int dim, boolean keepDim) {
+        return op(OpType.MEAN, List.of(this), new Object[]{dim, keepDim}, this.shape() /* needs shape inference */, this.dtype());
+    }
+
+    @Override
+    public Tensor sum() {
+        return op(OpType.SUM, List.of(this), new Object[0], new Shape(1), this.dtype());
+    }
+
+    @Override
+    public Tensor sum(int dim, boolean keepDim) {
+        return op(OpType.SUM, List.of(this), new Object[]{dim, keepDim}, this.shape() /* needs shape inference */, this.dtype());
+    }
+
+    @Override
+    public Tensor layerNorm(long[] normalizedShape, Tensor weight, Tensor bias, float eps) {
+        List<Tensor> inputs = new java.util.ArrayList<>();
+        inputs.add(this);
+        if (weight != null) inputs.add(weight);
+        if (bias != null) inputs.add(bias);
+        return op(OpType.LAYER_NORM, inputs, new Object[]{normalizedShape, eps}, this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor rmsNorm(Tensor weight, float eps) {
+        List<Tensor> inputs = new java.util.ArrayList<>();
+        inputs.add(this);
+        if (weight != null) inputs.add(weight);
+        return op(OpType.RMS_NORM, inputs, new Object[]{eps}, this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor batchNorm(Tensor weight, Tensor bias, Tensor runningMean, Tensor runningVar, boolean training, float momentum, float eps) {
+        return op(OpType.BATCH_NORM, List.of(this, weight, bias, runningMean, runningVar), new Object[]{training, momentum, eps}, this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor conv2d(Tensor weight, Tensor bias, int stride, int padding, int dilation, int groups) {
+        List<Tensor> inputs = new java.util.ArrayList<>();
+        inputs.add(this);
+        if (weight != null) inputs.add(weight);
+        if (bias != null) inputs.add(bias);
+        return op(OpType.CONV2D, inputs, new Object[]{stride, padding, dilation, groups}, this.shape() /* shape inference */, this.dtype());
+    }
+
+    @Override
+    public Tensor maxPool2d(int kernelSize, int stride, int padding) {
+        return op(OpType.MAX_POOL_2D, List.of(this), new Object[]{kernelSize, stride, padding}, this.shape() /* shape inference */, this.dtype());
+    }
+
+    @Override
+    public Tensor adaptiveAvgPool2d(int outputH, int outputW) {
+        return op(OpType.ADAPTIVE_AVG_POOL_2D, List.of(this), new Object[]{outputH, outputW}, this.shape() /* shape inference */, this.dtype());
+    }
+
+    @Override
+    public Tensor attention(Tensor K, Tensor V) {
+        return op(OpType.ATTENTION, List.of(this, K, V), new Object[0], this.shape(), this.dtype());
+    }
+
+    @Override
+    public Tensor embedding(Tensor weight, long paddingIdx) {
+        return op(OpType.EMBEDDING, List.of(this, weight), new Object[]{paddingIdx}, this.shape() /* shape inference */, weight.dtype());
+    }
 }
