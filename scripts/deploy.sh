@@ -16,6 +16,7 @@ GIT_PUSH=true      # Enabled by default
 RUN_GRADLE=true
 SKIP_COMMIT=false
 FORCE=false
+LOCAL_MAVEN=false
 
 # Colors for output
 RED='\033[0;31m'
@@ -45,6 +46,7 @@ usage() {
     echo "  --no-build                       Skip Gradle build and deployment"
     echo "  --keep-tests                     Do not skip tests during build"
     echo "  --skip-commit                    Skip git commit after version update"
+    echo "  --local-maven                    Publish only to Maven Local (skips remote publish)"
     echo "  --dry-run                        Show commands without executing them"
     echo "  -h, --help                       Display this help message"
     echo ""
@@ -69,6 +71,7 @@ while [[ "$#" -gt 0 ]]; do
         --no-build|--no-jar) RUN_GRADLE=false ;;
         --keep-tests) SKIP_TESTS=false ;;
         --skip-commit) SKIP_COMMIT=true ;;
+        --local-maven) LOCAL_MAVEN=true ;;
         --dry-run) DRY_RUN=true ;;
         -h|--help) usage ;;
         *) echo -e "${RED}Unknown parameter: $1${NC}"; usage ;;
@@ -172,7 +175,11 @@ fi
 
 # Build and Deployment
 if [ "$RUN_GRADLE" = true ]; then
-    GRADLE_ARGS="clean build publishToMavenLocal publish"
+    if [ "$LOCAL_MAVEN" = true ]; then
+        GRADLE_ARGS="clean build publishToMavenLocal"
+    else
+        GRADLE_ARGS="clean build publishToMavenLocal publish"
+    fi
 
     if [ "$SKIP_TESTS" = true ]; then
         GRADLE_ARGS="$GRADLE_ARGS -x test"
@@ -211,7 +218,11 @@ if [ -n "$NEW_VERSION" ]; then
     fi
     echo -e "  Pushed:   $( [ "$GIT_PUSH" = true ] && echo -e "${GREEN}Yes${NC}" || echo -e "${YELLOW}No${NC}" )"
     if [ "$RUN_GRADLE" = true ]; then
-        echo -e "  Build:    ${GREEN}clean build publishToMavenLocal publish${NC}"
+        if [ "$LOCAL_MAVEN" = true ]; then
+            echo -e "  Build:    ${GREEN}clean build publishToMavenLocal${NC}"
+        else
+            echo -e "  Build:    ${GREEN}clean build publishToMavenLocal publish${NC}"
+        fi
     else
         echo -e "  Build:    ${YELLOW}Skipped${NC}"
     fi

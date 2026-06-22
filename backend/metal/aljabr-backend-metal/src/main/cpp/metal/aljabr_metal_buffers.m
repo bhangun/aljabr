@@ -9,6 +9,7 @@ static id<MTLBuffer> g_swiglu_gate_scratch = nil;
 static id<MTLBuffer> g_swiglu_up_scratch = nil;
 static id<MTLBuffer> g_swiglu_combined_scratch = nil;
 static size_t g_swiglu_scratch_capacity = 0;
+static size_t g_swiglu_combined_scratch_capacity = 0;
 static NSMutableDictionary<NSString*, id<MTLBuffer>>* g_weight_buffer_cache = nil;
 
 id<MTLBuffer> aljabr_metal_wrap_ptr(void* ptr, size_t bytes) {
@@ -67,12 +68,30 @@ BOOL aljabr_metal_ensure_swiglu_scratch(size_t activation_bytes,
             g_swiglu_up_scratch = nil;
             g_swiglu_combined_scratch = nil;
             g_swiglu_scratch_capacity = 0;
+            g_swiglu_combined_scratch_capacity = 0;
             return NO;
         }
         g_swiglu_scratch_capacity = activation_bytes;
+        g_swiglu_combined_scratch_capacity = activation_bytes;
     }
     *gate = g_swiglu_gate_scratch;
     *up = g_swiglu_up_scratch;
+    *combined = g_swiglu_combined_scratch;
+    return YES;
+}
+
+BOOL aljabr_metal_ensure_swiglu_combined_scratch(size_t activation_bytes,
+                                                 id<MTLBuffer>* combined) {
+    if (activation_bytes == 0) return NO;
+    if (g_swiglu_combined_scratch_capacity < activation_bytes
+            || g_swiglu_combined_scratch == nil) {
+        g_swiglu_combined_scratch = [g_device newBufferWithLength:activation_bytes options:MTLResourceStorageModePrivate];
+        if (g_swiglu_combined_scratch == nil) {
+            g_swiglu_combined_scratch_capacity = 0;
+            return NO;
+        }
+        g_swiglu_combined_scratch_capacity = activation_bytes;
+    }
     *combined = g_swiglu_combined_scratch;
     return YES;
 }

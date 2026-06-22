@@ -340,10 +340,8 @@ static int aljabr_metal_gated_ffn_matvec_rows_bf16_impl(void* C,
 
     @autoreleasepool {
         size_t activation_bytes = (size_t)M * intermediate_dim * sizeof(float);
-        id<MTLBuffer> bufGate = nil;
-        id<MTLBuffer> bufUp = nil;
         id<MTLBuffer> bufCombined = nil;
-        if (!ensure_swiglu_scratch(activation_bytes, &bufGate, &bufUp, &bufCombined)) {
+        if (!ensure_swiglu_combined_scratch(activation_bytes, &bufCombined)) {
             return -4;
         }
 
