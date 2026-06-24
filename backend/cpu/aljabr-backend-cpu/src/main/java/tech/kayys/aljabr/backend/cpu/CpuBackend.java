@@ -142,34 +142,58 @@ public final class CpuBackend implements ComputeBackend {
 
     @Override
     public Tensor slice(Tensor a, long[] offsets, long[] sizes) {
-        // Contiguous slice — copy the selected region into a new buffer.
+        // Attempt zero-copy view when the slice is contiguous in row-major layout.
         Shape inShape = a.shape();
         int rank = inShape.rank();
         long[] inDims = inShape.dims();
 
         Shape outShape = new Shape(sizes);
-        CpuBuffer outBuf = allocate(outShape.numel() * 4);
 
-        // Strides in elements (row-major)
-        long[] strides = new long[rank];
-        strides[rank - 1] = 1;
-        for (int i = rank - 2; i >= 0; i--)
-            strides[i] = strides[i + 1] * inDims[i + 1];
+        // Strides in elements (row-major) for the input
+        long[] baseStrides = new long[rank];
+        baseStrides[rank - 1] = 1;
+        for (int i = rank - 2; i >= 0; i--) baseStrides[i] = baseStrides[i + 1] * inDims[i + 1];
+
+        // Expected contiguous strides for the view
+        long[] viewExpected = new long[rank];
+        long exp = 1;
+        for (int i = rank - 1; i >= 0; i--) {
+            viewExpected[i] = exp;
+            exp *= sizes[i];
+        }
+
+        boolean isContiguous = true;
+        for (int i = 0; i < rank; i++) {
+            if (baseStrides[i] != viewExpected[i]) { isContiguous = false; break; }
+        }
 
         MemorySegment src = seg(a);
-        MemorySegment dst = outBuf.segment();
+        long elemOffset = 0;
+        for (int i = 0; i < rank; i++) elemOffset += offsets[i] * baseStrides[i];
+        long byteOffset = elemOffset * 4L;
+        long byteSize = outShape.numel() * 4L;
+
+        if (isContiguous) {
+            // Create zero-copy view into the existing segment
+            MemorySegment viewSeg = src.asSlice(byteOffset, byteSize);
+            java.lang.foreign.Arena viewArena = ((DefaultTensor) a).buffer().arena();
+            CpuBuffer viewBuf = new CpuBuffer(viewSeg, viewArena);
+            return new DefaultTensor(outShape, a.dtype(), a.device(), viewBuf, this);
+        }
+
+        // Fallback: copy the selected region into a new buffer (existing behavior)
+        CpuBuffer outBuf = allocate(outShape.numel() * 4);
+
         long outIdx = 0;
         long totalOut = outShape.numel();
 
-        // Walk output elements and map back to input positions
         long[] cursor = new long[rank];
         for (long elem = 0; elem < totalOut; elem++) {
             long inIdx = 0;
-            for (int d = 0; d < rank; d++) inIdx += (offsets[d] + cursor[d]) * strides[d];
-            dst.set(ValueLayout.JAVA_FLOAT, outIdx * 4L,
+            for (int d = 0; d < rank; d++) inIdx += (offsets[d] + cursor[d]) * baseStrides[d];
+            outBuf.segment().set(ValueLayout.JAVA_FLOAT, outIdx * 4L,
                     src.get(ValueLayout.JAVA_FLOAT, inIdx * 4L));
             outIdx++;
-            // Increment cursor
             for (int d = rank - 1; d >= 0; d--) {
                 if (++cursor[d] < sizes[d]) break;
                 cursor[d] = 0;

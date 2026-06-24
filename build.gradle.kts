@@ -240,8 +240,6 @@ subprojects {
     afterEvaluate {
         extensions.configure<PublishingExtension>("publishing") {
             repositories {
-                mavenLocal()
-
                 // ── GitHub Packages ───────────────────────────────────────────
                 // Credentials: set GITHUB_ACTOR and GITHUB_TOKEN as repository secrets.
                 // They are automatically available inside GitHub Actions workflows.

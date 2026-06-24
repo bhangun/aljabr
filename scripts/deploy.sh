@@ -17,6 +17,8 @@ RUN_GRADLE=true
 SKIP_COMMIT=false
 FORCE=false
 LOCAL_MAVEN=false
+PUBLISH_GITHUB=false
+GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-}"  # owner/repo, used to default GitHub Packages URL when available
 
 # Colors for output
 RED='\033[0;31m'
@@ -46,7 +48,8 @@ usage() {
     echo "  --no-build                       Skip Gradle build and deployment"
     echo "  --keep-tests                     Do not skip tests during build"
     echo "  --skip-commit                    Skip git commit after version update"
-    echo "  --local-maven                    Publish only to Maven Local (skips remote publish)"
+    echo "  --local-maven, --local           Publish only to Maven Local (skips remote publish)"
+    echo "  --github                         Publish only to GitHub Packages (requires GITHUB_REPOSITORY or --repo)"
     echo "  --dry-run                        Show commands without executing them"
     echo "  -h, --help                       Display this help message"
     echo ""
@@ -71,7 +74,8 @@ while [[ "$#" -gt 0 ]]; do
         --no-build|--no-jar) RUN_GRADLE=false ;;
         --keep-tests) SKIP_TESTS=false ;;
         --skip-commit) SKIP_COMMIT=true ;;
-        --local-maven) LOCAL_MAVEN=true ;;
+        --local-maven|--local) LOCAL_MAVEN=true ;;
+        --github) PUBLISH_GITHUB=true ;;
         --dry-run) DRY_RUN=true ;;
         -h|--help) usage ;;
         *) echo -e "${RED}Unknown parameter: $1${NC}"; usage ;;
@@ -175,11 +179,30 @@ fi
 
 # Build and Deployment
 if [ "$RUN_GRADLE" = true ]; then
-    if [ "$LOCAL_MAVEN" = true ]; then
+    if [ "$PUBLISH_GITHUB" = true ]; then
+        # Publish only to GitHub Packages (or provided REPO_URL)
+        if [ -z "$REPO_URL" ]; then
+            if [ -n "$GITHUB_REPOSITORY" ]; then
+                REPO_URL="https://maven.pkg.github.com/$GITHUB_REPOSITORY"
+                echo "Using GitHub Packages repository: $REPO_URL"
+            else
+                echo "Error: --github requested but GITHUB_REPOSITORY not set and no --repo provided." >&2
+                exit 1
+            fi
+        fi
+        GRADLE_ARGS="clean build publish"
+    elif [ "$LOCAL_MAVEN" = true ]; then
         GRADLE_ARGS="clean build publishToMavenLocal"
     else
+        # Default: publish to both local and remote
         GRADLE_ARGS="clean build publishToMavenLocal publish"
     fi
+
+    # Prevent including gollek composite during aljabr deploy by default — can be overridden with -PskipGollek=false
+    GRADLE_ARGS="$GRADLE_ARGS -PskipGollek=true"
+    
+    # Exclude autograd module (training-only) from foundational builds
+    GRADLE_ARGS="$GRADLE_ARGS -PskipAutograd=true"
 
     if [ "$SKIP_TESTS" = true ]; then
         GRADLE_ARGS="$GRADLE_ARGS -x test"

@@ -42,9 +42,16 @@ public final class OffHeapBufferPool implements AutoCloseable {
     private static final int  NUM_BUCKETS        = MAX_BUCKET_SHIFT - MIN_BUCKET_SHIFT + 1;
 
     @SuppressWarnings("unchecked")
-    private final Deque<MemorySegment>[] buckets = new Deque[NUM_BUCKETS];
+    private final java.util.concurrent.atomic.AtomicReference<Node>[] heads = new java.util.concurrent.atomic.AtomicReference[NUM_BUCKETS];
 
     private final Arena arena;
+
+    // Treiber node for lock-free stacks
+    private static final class Node {
+        final MemorySegment seg;
+        final Node next;
+        Node(MemorySegment seg, Node next) { this.seg = seg; this.next = next; }
+    }
 
     // ── Telemetry ──────────────────────────────────────────────────────────────
     private final LongAdder hits        = new LongAdder();
@@ -60,7 +67,7 @@ public final class OffHeapBufferPool implements AutoCloseable {
     public OffHeapBufferPool(Arena arena) {
         this.arena = arena;
         for (int i = 0; i < NUM_BUCKETS; i++) {
-            buckets[i] = new ArrayDeque<>();
+            heads[i] = new java.util.concurrent.atomic.AtomicReference<>();
         }
     }
 
@@ -79,12 +86,13 @@ public final class OffHeapBufferPool implements AutoCloseable {
     public MemorySegment acquire(long byteSize) {
         int bucketIdx = bucketFor(byteSize);
         if (bucketIdx >= 0) {
-            Deque<MemorySegment> bucket = buckets[bucketIdx];
-            synchronized (bucket) {
-                MemorySegment seg = bucket.poll();
-                if (seg != null) {
+            java.util.concurrent.atomic.AtomicReference<Node> head = heads[bucketIdx];
+            while (true) {
+                Node h = head.get();
+                if (h == null) break;
+                if (head.compareAndSet(h, h.next)) {
                     hits.increment();
-                    return seg;
+                    return h.seg;
                 }
             }
         }
@@ -105,10 +113,11 @@ public final class OffHeapBufferPool implements AutoCloseable {
     public void release(MemorySegment seg) {
         int bucketIdx = bucketFor(seg.byteSize());
         if (bucketIdx >= 0) {
-            Deque<MemorySegment> bucket = buckets[bucketIdx];
-            synchronized (bucket) {
-                bucket.push(seg);
-            }
+            java.util.concurrent.atomic.AtomicReference<Node> head = heads[bucketIdx];
+            Node n;
+            do {
+                n = new Node(seg, head.get());
+            } while (!head.compareAndSet(n.next, n));
             bytesPooled.add(seg.byteSize());
         }
         // Segments larger than MAX_BUCKET_BYTES are not pooled — they will be freed when

@@ -1,0 +1,55 @@
+name: Deploy Aljabr
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 0.1.0 or 0.1.0-SNAPSHOT)'
+        required: false
+      publish_remote:
+        description: 'Publish to remote repository (GitHub Packages)'
+        required: false
+        default: 'false'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Make deploy script executable
+        run: chmod +x aljabr/scripts/deploy.sh
+
+      - name: Run Aljabr deploy (publish to mavenLocal or remote)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ARGS=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+            ARGS="$ARGS -v ${{ github.event.inputs.version }}"
+          fi
+          if [ "${{ github.event.inputs.publish_remote }}" != 'true' ]; then
+            ARGS="$ARGS --local-maven"
+          fi
+          echo "Running: aljabr/scripts/deploy.sh $ARGS"
+          aljabr/scripts/deploy.sh $ARGS
+
+      - name: Upload mavenLocal cache (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-local-repo
+          path: ~/.m2/repository
+          retention-days: 3

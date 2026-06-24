@@ -12,74 +12,31 @@ fun includeOptionalProject(projectPath: String, vararg candidatePaths: String) {
     project(":$projectPath").projectDir = projectDir
 }
 
-//include("aljabr-utils")
-/* include("compiler:aljabr-compiler")
-include("compiler:aljabr-neural-compiler") */
-//include("core:aljabr-adapter")
-//include("core:aljabr-distributed")
+
 includeOptionalProject("core:aljabr-core", "core/aljabr-core")
 
-/* include("core:aljabr-multitenancy")
-include("core:aljabr-observability")
-include("core:aljabr-provider-core")
-include("core:aljabr-provider-routing")
+// Map gollek core (used by some aljabr integration tests) if present in repo
+/* val skipGollek = gradle.startParameter.projectProperties["skipGollek"] == "true"
+if (!skipGollek) {
+    includeOptionalProject("core:gollek-core", "../gollek/core/gollek-core", "../gollek/core/gollek-core")
+} else {
+    println("[aljabr] skipGollek=true -> not including core:gollek-core in composite build")
+}
  */
+
+// Autograd is training-only; exclude from foundational builds
+val skipAutograd = gradle.startParameter.projectProperties["skipAutograd"] == "true" ||
+                   gradle.startParameter.projectProperties["skipGollek"] == "true"
+if (!skipAutograd) {
+    include("core:autograd")
+}
+
 include("core:aljabr-tensor")
 include("core:aljabr-core")
 include("core:aljabr-error-code")
 include("core:aljabr-nn")
 
-
-//include("examples:jupyter-deps")
-//include("integration:aljabr-jupyter-kernel")
-//project(":integration:aljabr-jupyter-kernel").projectDir = file("integration/jupyter/aljabr-jupyter-kernel")
-includeOptionalProject("suling", "../extensions/audio/suling", "stubs/suling")
-/* include("optimization:aljabr-plugin-elastic-ep")
-// include("optimization:aljabr-plugin-evicpress")
-include("optimization:aljabr-plugin-fa3")
-include("optimization:aljabr-plugin-fa4")
-// include("optimization:aljabr-plugin-hybrid-attn")
-include("optimization:aljabr-plugin-kv-cache")
-include("optimization:aljabr-plugin-paged-attention")
-// include("optimization:aljabr-plugin-perfmode")
-// include("optimization:aljabr-plugin-prefill-decode")
-// include("optimization:aljabr-plugin-prompt-cache")
-include("optimization:aljabr-plugin-qlora")
-// include("optimization:aljabr-plugin-wait-scheduler")
-// include("optimization:aljabr-plugin-weight-offload") */
-/* include("plugins:aljabr-plugin-content-safety")
-include("plugins:aljabr-plugin-mcp")
-include("plugins:aljabr-plugin-model-router") */
-// include("plugins:aljabr-plugin-observability")
-// include("plugins:aljabr-plugin-pii-redaction")
-// include("plugins:aljabr-plugin-prompt")
-// include("plugins:aljabr-plugin-quota")
-// include("plugins:aljabr-plugin-rag")
-// include("plugins:aljabr-plugin-reasoning")
-// include("plugins:aljabr-plugin-sampling")
-// include("plugins:aljabr-plugin-streaming")
-// include("plugins:aljabr-safetensor-rag")
-
-// include("provider:aljabr-plugin-anthropic")
-// include("provider:aljabr-plugin-cerebras")
-// include("provider:aljabr-plugin-gemini")
-
-
-/* include("sdk:aljabr-sdk")
-include("sdk:aljabr-sdk-agent")
-include("sdk:aljabr-sdk-api")
-include("sdk:aljabr-sdk-core")
-include("sdk:aljabr-sdk-local")
-include("sdk:aljabr-sdk-remote")
-if (file("sdk/aljabr-sdk-session").isDirectory) {
-    include("sdk:aljabr-sdk-session")
-} */
-// include("spi:aljabr-spi") // root aggregator not present in repo; included specific spi modules below
-include("spi:aljabr-spi-model")
-    //includeOptionalProject("spi:aljabr-spi-plugin", "spi/aljabr-spi-plugin")
-/* include("spi:aljabr-spi-provider")
-include("spi:aljabr-spi-runtime") */
-
+include("core:aljabr-spi-model")
 
 //include("backend:blackwell:aljabr-kernel-blackwell")
 
