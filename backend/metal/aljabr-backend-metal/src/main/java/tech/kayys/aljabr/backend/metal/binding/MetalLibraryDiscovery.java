@@ -24,6 +24,7 @@ public class MetalLibraryDiscovery {
         Path cwd = Path.of("").toAbsolutePath();
         Path[] localCandidates = new Path[] {
                 cwd.resolve("aljabr/backend/metal/aljabr-backend-metal/target/native/darwin-aarch64").resolve(LIB_NAME),
+                cwd.resolve("../aljabr/backend/metal/aljabr-backend-metal/target/native/darwin-aarch64").resolve(LIB_NAME),
                 cwd.resolve("backend/metal/aljabr-backend-metal/target/native/darwin-aarch64").resolve(LIB_NAME),
                 cwd.resolve(LIB_NAME)
         };

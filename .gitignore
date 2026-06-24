@@ -10,6 +10,8 @@ target/
 build/
 **/build/
 
+.gradle/
+**/.gradle/
 .gradle-sandbox/
 .gradle-worker/
 
