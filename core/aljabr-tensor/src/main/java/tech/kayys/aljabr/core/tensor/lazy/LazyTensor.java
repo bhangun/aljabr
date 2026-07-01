@@ -45,6 +45,11 @@ public class LazyTensor implements Tensor {
     }
 
     @Override
+    public float[] toFloatArray() {
+        return eval().toFloatArray();
+    }
+
+    @Override
     public DType dtype() {
         return node.getOutputDType();
     }

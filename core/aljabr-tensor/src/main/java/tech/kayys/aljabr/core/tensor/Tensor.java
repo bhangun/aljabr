@@ -137,4 +137,5 @@ public interface Tensor {
     Tensor embedding(Tensor weight, long paddingIdx);
 
     long numel();
+    float[] toFloatArray();
 }
