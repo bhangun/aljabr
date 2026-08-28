@@ -1,0 +1,208 @@
+// lib/core/utils/diff_engine.dart
+import 'package:diff_match_patch/diff_match_patch.dart';
+import '../../domain/entities/entities.dart';
+
+/// Computes a [FileDiff] between two strings at line granularity.
+abstract final class DiffEngine {
+  static FileDiff compute({
+    required String fileId,
+    required String fileName,
+    required String original,
+    required String modified,
+  }) {
+    final lines = _computeLines(original, modified);
+    final added = lines.where((l) => l.type == DiffLineType.added).length;
+    final removed = lines.where((l) => l.type == DiffLineType.removed).length;
+
+    return FileDiff(
+      fileId: fileId,
+      fileName: fileName,
+      originalContent: original,
+      modifiedContent: modified,
+      lines: lines,
+      addedLines: added,
+      removedLines: removed,
+    );
+  }
+
+  static List<DiffLine> _computeLines(String original, String modified) {
+    final dmp = DiffMatchPatch();
+    
+    // If both are empty or identical, return no changes
+    if (original == modified) {
+      return _linesToDiffLines(original.split('\n'));
+    }
+
+    // Use character-level diff
+    final diffs = dmp.diff(original, modified);
+    dmp.diff_cleanupSemantic(diffs);
+
+    // Convert character diffs to line diffs
+    return _charDiffsToLineDiffs(diffs);
+  }
+
+  /// Convert character-level diffs to line-level diffs
+  static List<DiffLine> _charDiffsToLineDiffs(List<Diff> diffs) {
+    final result = <DiffLine>[];
+    int oldLine = 1;
+    int newLine = 1;
+    String oldText = '';
+    String newText = '';
+
+    // First pass: collect all text
+    for (final diff in diffs) {
+      switch (diff.operation) {
+        case DIFF_DELETE:
+          oldText += diff.text;
+          break;
+        case DIFF_INSERT:
+          newText += diff.text;
+          break;
+        case DIFF_EQUAL:
+          oldText += diff.text;
+          newText += diff.text;
+          break;
+      }
+    }
+
+    // Split into lines
+    final oldLines = oldText.split('\n');
+    final newLines = newText.split('\n');
+
+    // Second pass: generate line diffs
+    int i = 0, j = 0;
+    while (i < oldLines.length || j < newLines.length) {
+      if (i < oldLines.length && j < newLines.length && oldLines[i] == newLines[j]) {
+        // Context line (unchanged)
+        result.add(DiffLine(
+          type: DiffLineType.context,
+          content: oldLines[i],
+          oldLineNumber: oldLine++,
+          newLineNumber: newLine++,
+        ));
+        i++;
+        j++;
+      } else if (i < oldLines.length && (j >= newLines.length || oldLines[i] != newLines[j])) {
+        // Removed line
+        result.add(DiffLine(
+          type: DiffLineType.removed,
+          content: oldLines[i],
+          oldLineNumber: oldLine++,
+        ));
+        i++;
+      } else if (j < newLines.length && (i >= oldLines.length || oldLines[i] != newLines[j])) {
+        // Added line
+        result.add(DiffLine(
+          type: DiffLineType.added,
+          content: newLines[j],
+          newLineNumber: newLine++,
+        ));
+        j++;
+      }
+    }
+
+    return _collapseContext(result);
+  }
+
+  static List<DiffLine> _linesToDiffLines(List<String> lines) {
+    final result = <DiffLine>[];
+    for (var i = 0; i < lines.length; i++) {
+      result.add(DiffLine(
+        type: DiffLineType.context,
+        content: lines[i],
+        oldLineNumber: i + 1,
+        newLineNumber: i + 1,
+      ));
+    }
+    return result;
+  }
+
+  static List<DiffLine> _collapseContext(List<DiffLine> lines, {int context = 3}) {
+    if (lines.isEmpty) return lines;
+
+    final changed = <int>{};
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].type != DiffLineType.context) {
+        for (var j = i - context; j <= i + context; j++) {
+          if (j >= 0 && j < lines.length) changed.add(j);
+        }
+      }
+    }
+
+    if (changed.isEmpty) return lines; // no changes
+
+    final result = <DiffLine>[];
+    bool lastSkipped = false;
+    for (var i = 0; i < lines.length; i++) {
+      if (changed.contains(i)) {
+        lastSkipped = false;
+        result.add(lines[i]);
+      } else if (!lastSkipped) {
+        lastSkipped = true;
+        // hunk separator represented as a special context line
+        result.add(const DiffLine(
+          type: DiffLineType.context,
+          content: '...',
+        ));
+      }
+    }
+    return result;
+  }
+
+  /// Extract code blocks from assistant markdown and map to file diffs.
+  static List<FileDiff> extractDiffsFromResponse({
+    required String responseText,
+    required List<FileReference> contextFiles,
+  }) {
+    final diffs = <FileDiff>[];
+    final codeBlockRegex = RegExp(
+      r'```(?:(\w+)\s+)?(?:\/\/\s*)?([^\n]*\.[a-zA-Z0-9]+)?\n([\s\S]*?)```',
+      multiLine: true,
+    );
+
+    for (final match in codeBlockRegex.allMatches(responseText)) {
+      final lang = match.group(1) ?? '';
+      final fileHint = match.group(2)?.trim() ?? '';
+      final code = match.group(3) ?? '';
+
+      // Try to match against context files
+      FileReference? matched;
+      if (fileHint.isNotEmpty) {
+        matched = contextFiles.where((f) => f.name == fileHint || f.path == fileHint).firstOrNull;
+      }
+      if (matched == null && contextFiles.isNotEmpty) {
+        // Heuristic: pick first file with matching extension
+        matched = contextFiles.where((f) => f.language == lang).firstOrNull;
+      }
+
+      if (matched != null && code.trim() != matched.content.trim()) {
+        diffs.add(compute(
+          fileId: matched.id,
+          fileName: matched.name,
+          original: matched.content,
+          modified: code.trimRight(),
+        ));
+      }
+    }
+
+    return diffs;
+  }
+
+  /// Alternative: Use line-based diff for better accuracy
+  static List<DiffLine> computeLineDiff({
+    required List<String> oldLines,
+    required List<String> newLines,
+  }) {
+    final dmp = DiffMatchPatch();
+    final oldText = oldLines.join('\n');
+    final newText = newLines.join('\n');
+    
+    if (oldText == newText) {
+      return _linesToDiffLines(oldLines);
+    }
+
+    final diffs = dmp.diff(oldText, newText);
+    dmp.diff_cleanupSemantic(diffs);
+    return _charDiffsToLineDiffs(diffs);
+  }
+}
