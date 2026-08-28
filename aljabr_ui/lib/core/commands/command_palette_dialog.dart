@@ -6,7 +6,7 @@ import '../../theme/app_radii.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_typography.dart';
 import 'app_command.dart';
-import 'command_registry.dart';
+import 'package:aljabr_extension/aljabr_extension.dart';
 
 class CommandPaletteDialog extends StatefulWidget {
   final CommandRegistry registry;
@@ -50,7 +50,7 @@ class _CommandPaletteDialogState extends State<CommandPaletteDialog> {
       final cmd = _filteredCommands[_selectedIndex];
       Navigator.of(context).pop();
       if (cmd.action != null) {
-        cmd.action!(context);
+        cmd.action!(CommandContext(context: context));
       }
     }
   }

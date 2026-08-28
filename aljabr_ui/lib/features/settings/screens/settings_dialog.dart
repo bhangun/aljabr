@@ -1,21 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:aljabr_extension/aljabr_extension.dart';
 import '../../../theme/app_colors.dart';
 import 'skills_settings_view.dart';
 import '../../../data/backend_providers.dart';
 import '../../project/providers/active_project_provider.dart';
-
-enum _SettingsSection {
-  appearance,
-  aiProvider,
-  localLlm,
-  agentSecurity,
-  skills,
-  browser,
-  notifications,
-  privacy,
-  advanced,
-}
+import '../../../providers/module_manager_provider.dart';
 
 class SettingsDialog extends ConsumerStatefulWidget {
   const SettingsDialog({super.key});
@@ -25,10 +15,45 @@ class SettingsDialog extends ConsumerStatefulWidget {
 }
 
 class _SettingsDialogState extends ConsumerState<SettingsDialog> {
-  _SettingsSection _currentSection = _SettingsSection.appearance;
+  String? _currentSectionId;
 
   @override
   Widget build(BuildContext context) {
+    final settingsRegistry = ref.watch(settingsRegistryProvider);
+    final contributions = settingsRegistry.all;
+
+    if (contributions.isEmpty) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Container(
+          width: 920,
+          height: 650,
+          decoration: BoxDecoration(
+            color: AppTheme.background,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.border),
+          ),
+          child: const Center(
+            child: Text(
+              'No settings available',
+              style: TextStyle(color: AppTheme.textMuted),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final activeId = (_currentSectionId != null &&
+            contributions.any((c) => c.id == _currentSectionId))
+        ? _currentSectionId!
+        : contributions.first.id;
+
+    final activeContribution = contributions.firstWhere(
+      (c) => c.id == activeId,
+      orElse: () => contributions.first,
+    );
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: EdgeInsets.zero,
@@ -54,13 +79,13 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildLeftRail(),
+                  _buildLeftRail(contributions, activeId),
                   Container(
                     width: 1,
                     color: AppTheme.border,
                   ),
                   Expanded(
-                    child: _buildSectionContent(),
+                    child: _buildSectionContent(activeContribution),
                   ),
                 ],
               ),
@@ -104,116 +129,38 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
     );
   }
 
-  Widget _buildLeftRail() {
+  Widget _buildLeftRail(
+      List<SettingsContribution> contributions, String activeId) {
     return Container(
       width: 220,
       color: AppTheme.panel,
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 16),
         children: [
-          _NavItem(
-            icon: Icons.palette_outlined,
-            label: 'Appearance',
-            isSelected: _currentSection == _SettingsSection.appearance,
-            onTap: () =>
-                setState(() => _currentSection = _SettingsSection.appearance),
-          ),
-          _NavItem(
-            icon: Icons.smart_toy_outlined,
-            label: 'AI Provider',
-            isSelected: _currentSection == _SettingsSection.aiProvider,
-            onTap: () =>
-                setState(() => _currentSection = _SettingsSection.aiProvider),
-          ),
-          _NavItem(
-            icon: Icons.computer_outlined,
-            label: 'Local LLM',
-            isSelected: _currentSection == _SettingsSection.localLlm,
-            onTap: () =>
-                setState(() => _currentSection = _SettingsSection.localLlm),
-          ),
-          _NavItem(
-            icon: Icons.security_outlined,
-            label: 'Agent & Security',
-            isSelected: _currentSection == _SettingsSection.agentSecurity,
-            onTap: () => setState(
-                () => _currentSection = _SettingsSection.agentSecurity),
-          ),
-          _NavItem(
-            icon: Icons.psychology_outlined,
-            label: 'Skills',
-            isSelected: _currentSection == _SettingsSection.skills,
-            onTap: () =>
-                setState(() => _currentSection = _SettingsSection.skills),
-          ),
-          _NavItem(
-            icon: Icons.web_asset_outlined,
-            label: 'Browser',
-            isSelected: _currentSection == _SettingsSection.browser,
-            onTap: () =>
-                setState(() => _currentSection = _SettingsSection.browser),
-          ),
-          _NavItem(
-            icon: Icons.notifications_none_outlined,
-            label: 'Notifications',
-            isSelected: _currentSection == _SettingsSection.notifications,
-            onTap: () => setState(
-                () => _currentSection = _SettingsSection.notifications),
-          ),
-          _NavItem(
-            icon: Icons.lock_outline,
-            label: 'Privacy',
-            isSelected: _currentSection == _SettingsSection.privacy,
-            onTap: () =>
-                setState(() => _currentSection = _SettingsSection.privacy),
-          ),
-          _NavItem(
-            icon: Icons.tune_outlined,
-            label: 'Advanced',
-            isSelected: _currentSection == _SettingsSection.advanced,
-            onTap: () =>
-                setState(() => _currentSection = _SettingsSection.advanced),
-          ),
+          for (final item in contributions)
+            _NavItem(
+              icon: item.icon ?? Icons.settings_outlined,
+              label: item.title,
+              isSelected: activeId == item.id,
+              onTap: () => setState(() => _currentSectionId = item.id),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionContent() {
+  Widget _buildSectionContent(SettingsContribution activeContribution) {
     return Container(
       color: AppTheme.panelAlt,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 200),
         child: SingleChildScrollView(
-          key: ValueKey(_currentSection),
+          key: ValueKey(activeContribution.id),
           padding: const EdgeInsets.all(24),
-          child: _getSectionWidget(),
+          child: activeContribution.builder(context),
         ),
       ),
     );
-  }
-
-  Widget _getSectionWidget() {
-    switch (_currentSection) {
-      case _SettingsSection.appearance:
-        return _AppearanceSection();
-      case _SettingsSection.aiProvider:
-        return _AiProviderSection();
-      case _SettingsSection.localLlm:
-        return _LocalLlmSection();
-      case _SettingsSection.agentSecurity:
-        return _AgentSecuritySection();
-      case _SettingsSection.skills:
-        return const SkillsSettingsView();
-      case _SettingsSection.browser:
-        return _BrowserSection();
-      case _SettingsSection.notifications:
-        return _NotificationsSection();
-      case _SettingsSection.privacy:
-        return _PrivacySection();
-      case _SettingsSection.advanced:
-        return _AdvancedSection();
-    }
   }
 
   Widget _buildBottomBar(BuildContext context) {
@@ -253,7 +200,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
   }
 }
 
-class _AppearanceSection extends ConsumerWidget {
+class AppearanceSettingsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
@@ -323,12 +270,12 @@ class _AppearanceSection extends ConsumerWidget {
   }
 }
 
-class _AiProviderSection extends ConsumerStatefulWidget {
+class AiProviderSettingsSection extends ConsumerStatefulWidget {
   @override
-  ConsumerState<_AiProviderSection> createState() => _AiProviderSectionState();
+  ConsumerState<AiProviderSettingsSection> createState() => AiProviderSettingsSectionState();
 }
 
-class _AiProviderSectionState extends ConsumerState<_AiProviderSection> {
+class AiProviderSettingsSectionState extends ConsumerState<AiProviderSettingsSection> {
   String _provider = 'wayangPro';
 
   @override
@@ -443,12 +390,12 @@ class _AiProviderSectionState extends ConsumerState<_AiProviderSection> {
   }
 }
 
-class _LocalLlmSection extends ConsumerStatefulWidget {
+class LocalLlmSettingsSection extends ConsumerStatefulWidget {
   @override
-  ConsumerState<_LocalLlmSection> createState() => _LocalLlmSectionState();
+  ConsumerState<LocalLlmSettingsSection> createState() => LocalLlmSettingsSectionState();
 }
 
-class _LocalLlmSectionState extends ConsumerState<_LocalLlmSection> {
+class LocalLlmSettingsSectionState extends ConsumerState<LocalLlmSettingsSection> {
   String _backend = 'gguf';
 
   @override
@@ -533,7 +480,7 @@ class _LocalLlmSectionState extends ConsumerState<_LocalLlmSection> {
   }
 }
 
-class _AgentSecuritySection extends ConsumerWidget {
+class AgentSecuritySettingsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
@@ -596,7 +543,7 @@ class _AgentSecuritySection extends ConsumerWidget {
   }
 }
 
-class _BrowserSection extends ConsumerWidget {
+class BrowserSettingsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
@@ -646,7 +593,7 @@ class _BrowserSection extends ConsumerWidget {
   }
 }
 
-class _NotificationsSection extends ConsumerWidget {
+class NotificationsSettingsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
@@ -682,7 +629,7 @@ class _NotificationsSection extends ConsumerWidget {
   }
 }
 
-class _PrivacySection extends ConsumerWidget {
+class PrivacySettingsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
@@ -715,12 +662,12 @@ class _PrivacySection extends ConsumerWidget {
   }
 }
 
-class _AdvancedSection extends ConsumerStatefulWidget {
+class AdvancedSettingsSection extends ConsumerStatefulWidget {
   @override
-  ConsumerState<_AdvancedSection> createState() => _AdvancedSectionState();
+  ConsumerState<AdvancedSettingsSection> createState() => AdvancedSettingsSectionState();
 }
 
-class _AdvancedSectionState extends ConsumerState<_AdvancedSection> {
+class AdvancedSettingsSectionState extends ConsumerState<AdvancedSettingsSection> {
   bool _isIndexing = false;
 
   Future<void> _handleIndexWorkspace() async {

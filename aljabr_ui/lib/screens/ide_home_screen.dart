@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_colors.dart';
 import '../widgets/sidebar/sidebar_widget.dart';
+import 'package:aljabr_extension/aljabr_extension.dart';
+import '../widgets/extension_region_host.dart';
 import '../features/chat/widgets/chat/chat_panel.dart';
 import '../features/editor/widgets/editor_panel_shell.dart';
 
@@ -11,7 +13,7 @@ import '../features/backend_monitor/services/backend_installer_service.dart';
 
 import 'package:flutter/services.dart';
 import '../core/commands/command_palette_dialog.dart';
-import '../core/commands/command_registry.dart';
+import '../providers/module_manager_provider.dart';
 
 class _OpenCommandPaletteIntent extends Intent {
   const _OpenCommandPaletteIntent();
@@ -28,7 +30,6 @@ class IdeHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _IdeHomeScreenState extends ConsumerState<IdeHomeScreen> {
-  final CommandRegistry _commandRegistry = CommandRegistry();
 
   @override
   void initState() {
@@ -41,7 +42,7 @@ class _IdeHomeScreenState extends ConsumerState<IdeHomeScreen> {
   void _openCommandPalette() {
     showDialog(
       context: context,
-      builder: (context) => CommandPaletteDialog(registry: _commandRegistry),
+      builder: (context) => CommandPaletteDialog(registry: ref.read(commandRegistryProvider)),
     );
   }
 
@@ -91,14 +92,7 @@ class _IdeHomeScreenState extends ConsumerState<IdeHomeScreen> {
                     children: [
                       SidebarWidget(),
                       VerticalDivider(width: 1),
-                      Expanded(
-                        flex: 5,
-                        child: ChatPanel(
-                          slashCommands: [],
-                        ),
-                      ),
-                      VerticalDivider(width: 1),
-                      Expanded(flex: 4, child: EditorPanelShell()),
+                      Expanded(child: ExtensionRegionHost(region: UiRegion.mainWorkbench)),
                     ],
                   );
                 }

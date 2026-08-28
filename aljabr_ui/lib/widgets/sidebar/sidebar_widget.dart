@@ -1,28 +1,28 @@
 import 'package:aljabr/features/project/widgets/sidebar_project_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:aljabr_extension/aljabr_extension.dart';
+import '../../providers/module_manager_provider.dart';
+
 import '../../features/project/widgets/new_project_button.dart';
 import '../../features/project/widgets/new_session_button.dart';
 import '../../theme/app_colors.dart';
 import '../../features/project/widgets/project_switcher.dart';
 import 'connection_indicator.dart';
-import '../../features/backend_monitor/screens/backend_monitor_dialog.dart';
-import '../../features/backend_monitor/screens/enterprise_compliance_dialog.dart';
-import '../../features/dashboard/widgets/metric_dashboard.dart';
-import '../../features/settings/screens/settings_dialog.dart';
 
-/// Left rail: project switcher, new-session button, history/scheduled
-/// shortcuts, pinned sessions, then a collapsible session tree per project.
 class SidebarWidget extends ConsumerWidget {
   const SidebarWidget({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final registry = ref.watch(navigationRegistryProvider);
+    final groups = registry.groups;
+
     return Container(
       width: 272,
       color: AppTheme.panel,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 12),
           const ProjectSwitcher(),
@@ -37,84 +37,86 @@ class SidebarWidget extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          const _SidebarNavItem(
-              icon: Icons.history, label: 'Conversation History'),
-          const _SidebarNavItem(icon: Icons.schedule, label: 'Scheduled Tasks'),
           const SizedBox(height: 16),
-          const SidebarProjectSection(),
+          
+          Expanded(
+            child: ListView(
+              children: [
+                for (final group in groups)
+                  _NavigationGroupSection(
+                    group: group,
+                    items: registry.itemsForGroup(group.id),
+                  ),
+                const SidebarProjectSection(),
+              ],
+            ),
+          ),
+          
           const Divider(height: 1),
           const ConnectionIndicator(),
-          _SidebarNavItem(
-            icon: Icons.dns_rounded,
-            label: 'Backend Infrastructure',
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => const BackendMonitorDialog(),
-              );
-            },
-          ),
-          _SidebarNavItem(
-            icon: Icons.verified_user_rounded,
-            label: 'Enterprise Compliance',
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => const EnterpriseComplianceDialog(),
-              );
-            },
-          ),
-          _SidebarNavItem(
-            icon: Icons.bar_chart,
-            label: 'Metrics Dashboard',
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => const Dialog(
-                  child: SizedBox(
-                    width: 900,
-                    height: 700,
-                    child: MetricsDashboard(),
-                  ),
-                ),
-              );
-            },
-          ),
-          _SidebarNavItem(
-              icon: Icons.settings_outlined,
-              label: 'Settings',
-              onTap: () {
-                showDialog(
-                  context: context,
-                  barrierDismissible: true,
-                  builder: (_) => const SettingsDialog(),
-                );
-              }),
-          const SizedBox(height: 8),
         ],
       ),
     );
   }
 }
 
-class _SidebarNavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  const _SidebarNavItem({required this.icon, required this.label, this.onTap});
+class _NavigationGroupSection extends ConsumerWidget {
+  final NavigationGroup group;
+  final List<NavigationContribution> items;
+
+  const _NavigationGroupSection({
+    required this.group,
+    required this.items,
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Text(
+            group.title,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textMuted,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        for (final item in items) _NavigationItem(item: item),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+}
+
+class _NavigationItem extends ConsumerWidget {
+  final NavigationContribution item;
+
+  const _NavigationItem({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     return InkWell(
-      onTap: onTap ?? () {},
+      onTap: () async {
+        if (item.action != null) {
+          await item.action!(context);
+        }
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Row(
           children: [
-            Icon(icon, size: 16, color: AppTheme.textSecondary),
+            Icon(item.icon, size: 16, color: AppTheme.textSecondary),
             const SizedBox(width: 10),
-            Text(label,
+            Text(item.label,
                 style: const TextStyle(
                     color: AppTheme.textSecondary, fontSize: 13.5)),
           ],

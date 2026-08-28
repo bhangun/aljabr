@@ -16,7 +16,7 @@ import '../../providers/running_task_provider.dart';
 /// Main chat panel - orchestrates all chat-related components
 class ChatPanel extends ConsumerWidget {
   final List<String> slashCommands;
-  const ChatPanel({super.key, required this.slashCommands});
+  const ChatPanel({super.key, this.slashCommands = const []});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

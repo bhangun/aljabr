@@ -7,6 +7,10 @@ environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
+  aljabr_extension:
+    path: ../packages/aljabr_extension
+  aljabr_sdk:
+    path: ../packages/aljabr_sdk
   flutter:
     sdk: flutter
   objectbox: ^5.3.2
@@ -35,6 +39,10 @@ dependencies:
 
   riverpod: any
 dev_dependencies:
+  aljabr_extension:
+    path: ../packages/aljabr_extension
+  aljabr_sdk:
+    path: ../packages/aljabr_sdk
   build_runner: any
   objectbox_generator: any
   flutter_test:
