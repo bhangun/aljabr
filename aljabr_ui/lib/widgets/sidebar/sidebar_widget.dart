@@ -1,4 +1,3 @@
-import 'package:aljabr/features/project/widgets/sidebar_project_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:aljabr_extension/aljabr_extension.dart';
@@ -6,8 +5,9 @@ import '../../providers/module_manager_provider.dart';
 
 import '../../features/project/widgets/new_project_button.dart';
 import '../../features/project/widgets/new_session_button.dart';
-import '../../theme/app_colors.dart';
 import '../../features/project/widgets/project_switcher.dart';
+import '../../features/project/widgets/sidebar_project_section.dart';
+import '../../theme/app_colors.dart';
 import 'connection_indicator.dart';
 
 class SidebarWidget extends ConsumerWidget {
@@ -16,7 +16,15 @@ class SidebarWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final registry = ref.watch(navigationRegistryProvider);
-    final groups = registry.groups;
+    
+    // Top groups are anything other than 'management'
+    final topGroups = registry.groups
+        .where((g) => g.id != BuiltInNavigationGroups.management.id)
+        .toList();
+
+    // Management / footer items
+    final managementItems =
+        registry.itemsForGroup(BuiltInNavigationGroups.management.id);
 
     return Container(
       width: 272,
@@ -37,62 +45,29 @@ class SidebarWidget extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          
-          Expanded(
-            child: ListView(
-              children: [
-                for (final group in groups)
-                  _NavigationGroupSection(
-                    group: group,
-                    items: registry.itemsForGroup(group.id),
-                  ),
-                const SidebarProjectSection(),
-              ],
-            ),
-          ),
-          
+          const SizedBox(height: 8),
+
+          // Top Navigation Items (e.g. Conversation History, Scheduled Tasks, Agent)
+          for (final group in topGroups)
+            for (final item in registry.itemsForGroup(group.id))
+              _NavigationItem(key: ValueKey(item.id), item: item),
+
+          const SizedBox(height: 8),
+
+          // Middle scrollable project & session tree (takes remaining space)
+          const SidebarProjectSection(),
+
+          // Bottom Footer
           const Divider(height: 1),
           const ConnectionIndicator(),
+
+          // Management Contributions (Infrastructure, Compliance, Metrics, Settings)
+          for (final item in managementItems)
+            _NavigationItem(key: ValueKey(item.id), item: item),
+
+          const SizedBox(height: 8),
         ],
       ),
-    );
-  }
-}
-
-class _NavigationGroupSection extends ConsumerWidget {
-  final NavigationGroup group;
-  final List<NavigationContribution> items;
-
-  const _NavigationGroupSection({
-    required this.group,
-    required this.items,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (items.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Text(
-            group.title,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textMuted,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-        for (final item in items) _NavigationItem(item: item),
-        const SizedBox(height: 12),
-      ],
     );
   }
 }
@@ -100,7 +75,7 @@ class _NavigationGroupSection extends ConsumerWidget {
 class _NavigationItem extends ConsumerWidget {
   final NavigationContribution item;
 
-  const _NavigationItem({required this.item});
+  const _NavigationItem({super.key, required this.item});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -114,11 +89,19 @@ class _NavigationItem extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Row(
           children: [
-            Icon(item.icon, size: 16, color: AppTheme.textSecondary),
-            const SizedBox(width: 10),
-            Text(item.label,
+            if (item.icon != null) ...[
+              Icon(item.icon, size: 16, color: AppTheme.textSecondary),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Text(
+                item.label,
                 style: const TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 13.5)),
+                  color: AppTheme.textSecondary,
+                  fontSize: 13.5,
+                ),
+              ),
+            ),
           ],
         ),
       ),

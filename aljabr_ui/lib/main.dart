@@ -43,8 +43,8 @@ void main() async {
   await manager.activate(ChatModule());
   await manager.activate(EditorModule());
 
-  runApp(ProviderScope(
-    parent: container,
+  runApp(UncontrolledProviderScope(
+    container: container,
     child: const WayangIdeApp(),
   ));
 }

@@ -1,29 +1,51 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
+import '../extensions/contribution.dart';
+import 'status_bar_alignment.dart';
+import 'status_bar_context.dart';
 
-enum StatusBarAlignment {
-  left,
-  right,
-}
+typedef StatusBarTextBuilder = String Function(StatusBarContext context);
+typedef StatusBarAction = FutureOr<void> Function(
+  BuildContext context,
+  StatusBarContext statusContext,
+);
+typedef StatusBarWidgetBuilder = Widget Function(
+  BuildContext context,
+  StatusBarContext statusContext,
+);
 
-class StatusBarContribution {
+class StatusBarContribution implements OwnedContribution {
+  @override
   final String id;
-  final String? text;
-  final IconData? icon;
-  final String? tooltip;
+
+  @override
+  final String ownerId;
+
   final StatusBarAlignment alignment;
+  final StatusBarItemKind kind;
   final int order;
-  final Widget Function(BuildContext context)? builder;
-  final FutureOr<void> Function(BuildContext context)? onTap;
+  final String? tooltip;
+  final IconData? icon;
+  final String? commandId;
+  final StatusBarTextBuilder? textBuilder;
+  final StatusBarAction? action;
+  final StatusBarWidgetBuilder? builder;
+  final bool Function(StatusBarContext context)? isVisible;
+  final bool Function(StatusBarContext context)? isEnabled;
 
   const StatusBarContribution({
     required this.id,
-    this.text,
-    this.icon,
-    this.tooltip,
-    this.alignment = StatusBarAlignment.left,
+    required this.ownerId,
+    this.alignment = StatusBarAlignment.start,
+    this.kind = StatusBarItemKind.text,
     this.order = 0,
+    this.tooltip,
+    this.icon,
+    this.commandId,
+    this.textBuilder,
+    this.action,
     this.builder,
-    this.onTap,
+    this.isVisible,
+    this.isEnabled,
   });
 }

@@ -1,17 +1,21 @@
+import '../extensions/contribution.dart';
 import 'app_command.dart';
 
-class CommandRegistry {
+class CommandRegistry implements OwnerCleanup {
   final Map<String, AppCommand> _commands = {};
   final Map<String, String> _owners = {};
 
-  void register(AppCommand command, {required String ownerId}) {
+  void register(AppCommand command, {String? ownerId}) {
     if (_commands.containsKey(command.id)) {
       throw StateError('Command already registered: ${command.id}');
     }
     _commands[command.id] = command;
-    _owners[command.id] = ownerId;
+    if (ownerId != null) {
+      _owners[command.id] = ownerId;
+    }
   }
 
+  @override
   void unregisterAllForOwner(String ownerId) {
     final ids = _owners.entries
         .where((entry) => entry.value == ownerId)
@@ -24,7 +28,9 @@ class CommandRegistry {
     }
   }
 
-  List<AppCommand> get all => _commands.values.toList();
+  List<AppCommand> get all => List.unmodifiable(_commands.values.toList());
+
+  List<AppCommand> getAll() => all;
   
   AppCommand? get(String id) => _commands[id];
 

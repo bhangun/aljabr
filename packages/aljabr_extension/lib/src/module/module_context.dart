@@ -1,27 +1,65 @@
+import '../commands/app_command.dart';
 import '../commands/command_registry.dart';
+import '../views/view_contribution.dart';
 import '../views/view_registry.dart';
+import '../navigation/navigation_contribution.dart';
 import '../navigation/navigation_registry.dart';
+import '../settings/settings_contribution.dart';
 import '../settings/settings_registry.dart';
-import '../toolbar/toolbar_registry.dart';
+import '../context_menu/context_menu_contribution.dart';
 import '../context_menu/context_menu_registry.dart';
+import '../toolbar/toolbar_contribution.dart';
+import '../toolbar/toolbar_registry.dart';
+import '../status_bar/status_bar_contribution.dart';
 import '../status_bar/status_bar_registry.dart';
+import '../extensions/contribution_scope.dart';
+import '../extensions/extension_runtime.dart';
 
 class ModuleContext {
-  final CommandRegistry commands;
-  final ViewRegistry views;
-  final NavigationRegistry navigation;
-  final SettingsRegistry settings;
-  final ToolbarRegistry toolbar;
-  final ContextMenuRegistry contextMenus;
-  final StatusBarRegistry statusBar;
+  final String moduleId;
+  final ExtensionRuntime runtime;
 
-  const ModuleContext({
-    required this.commands,
-    required this.views,
-    required this.navigation,
-    required this.settings,
-    required this.toolbar,
-    required this.contextMenus,
-    required this.statusBar,
+  late final ContributionScope contributions =
+      ContributionScope(ownerId: moduleId);
+
+  ModuleContext({
+    required this.moduleId,
+    required this.runtime,
   });
+
+  CommandRegistry get commands => runtime.commands;
+  ViewRegistry get views => runtime.views;
+  NavigationRegistry get navigation => runtime.navigation;
+  SettingsRegistry get settings => runtime.settings;
+  ContextMenuRegistry get contextMenus => runtime.contextMenus;
+  ToolbarRegistry get toolbar => runtime.toolbar;
+  StatusBarRegistry get statusBar => runtime.statusBar;
+
+  void registerCommand(AppCommand command) {
+    commands.register(command, ownerId: moduleId);
+  }
+
+  void registerView(ViewContribution view) {
+    contributions.register(views, view);
+  }
+
+  void registerNavigation(NavigationContribution item) {
+    contributions.register(navigation, item);
+  }
+
+  void registerSettingsPage(SettingsPageContribution page) {
+    contributions.register(settings, page);
+  }
+
+  void registerContextMenuItem(MenuContribution item) {
+    contributions.register(contextMenus, item);
+  }
+
+  void registerToolbarItem(ToolbarContribution item) {
+    contributions.register(toolbar, item);
+  }
+
+  void registerStatusBarItem(StatusBarContribution item) {
+    contributions.register(statusBar, item);
+  }
 }

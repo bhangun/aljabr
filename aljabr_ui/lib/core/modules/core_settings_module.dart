@@ -8,64 +8,64 @@ class CoreSettingsModule implements AljabrModule {
 
   @override
   Future<void> activate(ModuleContext context) async {
-    context.settings.register(
-      SettingsContribution(
+    context.registerSettingsPage(
+      SettingsPageContribution(
         id: 'aljabr.settings.appearance',
+        ownerId: id,
         title: 'Appearance',
         icon: Icons.palette_outlined,
-        category: 'Core',
+        section: 'core',
         order: 10,
         builder: (_) => AppearanceSettingsSection(),
       ),
-      ownerId: id,
     );
 
-    context.settings.register(
-      SettingsContribution(
+    context.registerSettingsPage(
+      SettingsPageContribution(
         id: 'aljabr.settings.browser',
+        ownerId: id,
         title: 'Browser',
         icon: Icons.web_asset_outlined,
-        category: 'Core',
+        section: 'core',
         order: 60,
         builder: (_) => BrowserSettingsSection(),
       ),
-      ownerId: id,
     );
 
-    context.settings.register(
-      SettingsContribution(
+    context.registerSettingsPage(
+      SettingsPageContribution(
         id: 'aljabr.settings.notifications',
+        ownerId: id,
         title: 'Notifications',
         icon: Icons.notifications_none_outlined,
-        category: 'Core',
+        section: 'core',
         order: 70,
         builder: (_) => NotificationsSettingsSection(),
       ),
-      ownerId: id,
     );
 
-    context.settings.register(
-      SettingsContribution(
+    context.registerSettingsPage(
+      SettingsPageContribution(
         id: 'aljabr.settings.privacy',
+        ownerId: id,
         title: 'Privacy',
         icon: Icons.lock_outline,
-        category: 'Core',
+        section: 'core',
         order: 80,
         builder: (_) => PrivacySettingsSection(),
       ),
-      ownerId: id,
     );
 
-    context.settings.register(
-      SettingsContribution(
+    context.registerSettingsPage(
+      SettingsPageContribution(
         id: 'aljabr.settings.advanced',
+        ownerId: id,
         title: 'Advanced',
         icon: Icons.tune_outlined,
-        category: 'Core',
+        section: 'core',
         order: 90,
         builder: (_) => AdvancedSettingsSection(),
       ),
-      ownerId: id,
     );
   }
 

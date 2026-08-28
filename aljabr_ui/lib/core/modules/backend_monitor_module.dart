@@ -11,9 +11,10 @@ class BackendMonitorModule implements AljabrModule {
 
   @override
   Future<void> activate(ModuleContext context) async {
-    context.navigation.register(
+    context.registerNavigation(
       NavigationContribution(
         id: 'aljabr.infrastructure',
+        ownerId: id,
         groupId: BuiltInNavigationGroups.management.id,
         label: 'Backend Infrastructure',
         icon: Icons.dns_rounded,
@@ -23,13 +24,14 @@ class BackendMonitorModule implements AljabrModule {
             context: ctx,
             builder: (context) => const BackendMonitorDialog(),
           );
-        }
-      )
+        },
+      ),
     );
 
-    context.navigation.register(
+    context.registerNavigation(
       NavigationContribution(
         id: 'aljabr.enterprise_compliance',
+        ownerId: id,
         groupId: BuiltInNavigationGroups.management.id,
         label: 'Enterprise Compliance',
         icon: Icons.verified_user_rounded,
@@ -39,13 +41,14 @@ class BackendMonitorModule implements AljabrModule {
             context: ctx,
             builder: (context) => const EnterpriseComplianceDialog(),
           );
-        }
-      )
+        },
+      ),
     );
 
-    context.navigation.register(
+    context.registerNavigation(
       NavigationContribution(
         id: 'aljabr.metrics',
+        ownerId: id,
         groupId: BuiltInNavigationGroups.management.id,
         label: 'Metrics Dashboard',
         icon: Icons.bar_chart,
@@ -61,13 +64,14 @@ class BackendMonitorModule implements AljabrModule {
               ),
             ),
           );
-        }
-      )
+        },
+      ),
     );
 
-    context.navigation.register(
+    context.registerNavigation(
       NavigationContribution(
         id: 'aljabr.settings',
+        ownerId: id,
         groupId: BuiltInNavigationGroups.management.id,
         label: 'Settings',
         icon: Icons.settings_outlined,
@@ -78,8 +82,48 @@ class BackendMonitorModule implements AljabrModule {
             barrierDismissible: true,
             builder: (_) => const SettingsDialog(),
           );
-        }
-      )
+        },
+      ),
+    );
+
+    // End Toolbar items for Settings & Infrastructure
+    context.registerToolbarItem(
+      ToolbarContribution(
+        id: 'aljabr.toolbar.settings',
+        ownerId: id,
+        targetId: ToolbarTargets.app,
+        alignment: ToolbarAlignment.end,
+        kind: ToolbarItemKind.action,
+        icon: Icons.settings_outlined,
+        tooltip: 'Settings',
+        order: 90,
+        action: (ctx) {
+          showDialog(
+            context: ctx,
+            barrierDismissible: true,
+            builder: (_) => const SettingsDialog(),
+          );
+        },
+      ),
+    );
+
+    context.registerToolbarItem(
+      ToolbarContribution(
+        id: 'aljabr.toolbar.infrastructure',
+        ownerId: id,
+        targetId: ToolbarTargets.app,
+        alignment: ToolbarAlignment.end,
+        kind: ToolbarItemKind.action,
+        icon: Icons.dns_outlined,
+        tooltip: 'Backend Infrastructure',
+        order: 80,
+        action: (ctx) {
+          showDialog(
+            context: ctx,
+            builder: (context) => const BackendMonitorDialog(),
+          );
+        },
+      ),
     );
   }
 

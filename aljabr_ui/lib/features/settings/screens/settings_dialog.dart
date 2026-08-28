@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:aljabr_extension/aljabr_extension.dart';
 import '../../../theme/app_colors.dart';
-import 'skills_settings_view.dart';
+
 import '../../../data/backend_providers.dart';
 import '../../project/providers/active_project_provider.dart';
 import '../../../providers/module_manager_provider.dart';

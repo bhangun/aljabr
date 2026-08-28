@@ -39,10 +39,6 @@ dependencies:
 
   riverpod: any
 dev_dependencies:
-  aljabr_extension:
-    path: ../packages/aljabr_extension
-  aljabr_sdk:
-    path: ../packages/aljabr_sdk
   build_runner: any
   objectbox_generator: any
   flutter_test:

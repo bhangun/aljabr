@@ -1,44 +1,26 @@
+import '../extensions/contribution_registry.dart';
+import 'status_bar_alignment.dart';
+import 'status_bar_context.dart';
 import 'status_bar_contribution.dart';
 
-class StatusBarRegistry {
-  final Map<String, StatusBarContribution> _items = {};
-  final Map<String, String> _owners = {};
-
-  void register(StatusBarContribution item, {required String ownerId}) {
-    if (_items.containsKey(item.id)) {
-      throw StateError('StatusBar contribution already registered: ${item.id}');
-    }
-    _items[item.id] = item;
-    _owners[item.id] = ownerId;
-  }
-
-  void unregisterAllForOwner(String ownerId) {
-    final ids = _owners.entries
-        .where((entry) => entry.value == ownerId)
-        .map((entry) => entry.key)
+class StatusBarRegistry extends ContributionRegistry<StatusBarContribution> {
+  List<StatusBarContribution> resolve(
+    StatusBarContext context,
+    StatusBarAlignment alignment,
+  ) {
+    final items = getAll()
+        .where((item) => item.alignment == alignment)
+        .where((item) => item.isVisible?.call(context) ?? true)
         .toList();
 
-    for (final id in ids) {
-      _items.remove(id);
-      _owners.remove(id);
-    }
+    items.sort((a, b) => a.order.compareTo(b.order));
+    return items;
   }
 
-  List<StatusBarContribution> get leftItems {
-    final list = _items.values
-        .where((item) => item.alignment == StatusBarAlignment.left)
-        .toList();
-    list.sort((a, b) => a.order.compareTo(b.order));
-    return list;
+  List<StatusBarContribution> forAlignment(StatusBarAlignment alignment) {
+    return resolve(const StatusBarContext(), alignment);
   }
 
-  List<StatusBarContribution> get rightItems {
-    final list = _items.values
-        .where((item) => item.alignment == StatusBarAlignment.right)
-        .toList();
-    list.sort((a, b) => a.order.compareTo(b.order));
-    return list;
-  }
-
-  StatusBarContribution? get(String id) => _items[id];
+  List<StatusBarContribution> get leftItems => forAlignment(StatusBarAlignment.start);
+  List<StatusBarContribution> get rightItems => forAlignment(StatusBarAlignment.end);
 }

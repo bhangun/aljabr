@@ -5,7 +5,6 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_typography.dart';
-import 'app_command.dart';
 import 'package:aljabr_extension/aljabr_extension.dart';
 
 class CommandPaletteDialog extends StatefulWidget {
@@ -26,7 +25,7 @@ class _CommandPaletteDialogState extends State<CommandPaletteDialog> {
   @override
   void initState() {
     super.initState();
-    _filteredCommands = widget.registry.getAll();
+    _filteredCommands = widget.registry.all;
     _queryController.addListener(_onSearchChanged);
   }
 

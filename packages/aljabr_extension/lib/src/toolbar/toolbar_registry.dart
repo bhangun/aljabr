@@ -1,34 +1,27 @@
+import '../extensions/contribution_registry.dart';
+import 'toolbar_alignment.dart';
+import 'toolbar_context.dart';
 import 'toolbar_contribution.dart';
 
-class ToolbarRegistry {
-  final Map<String, ToolbarContribution> _items = {};
-  final Map<String, String> _owners = {};
-
-  void register(ToolbarContribution item, {required String ownerId}) {
-    if (_items.containsKey(item.id)) {
-      throw StateError('Toolbar contribution already registered: ${item.id}');
-    }
-    _items[item.id] = item;
-    _owners[item.id] = ownerId;
-  }
-
-  void unregisterAllForOwner(String ownerId) {
-    final ids = _owners.entries
-        .where((entry) => entry.value == ownerId)
-        .map((entry) => entry.key)
+class ToolbarRegistry extends ContributionRegistry<ToolbarContribution> {
+  List<ToolbarContribution> resolve(
+    ToolbarContext context,
+    ToolbarAlignment alignment,
+  ) {
+    final items = getAll()
+        .where((item) => item.targetId == context.targetId)
+        .where((item) => item.alignment == alignment)
+        .where((item) => item.isVisible?.call(context) ?? true)
         .toList();
 
-    for (final id in ids) {
-      _items.remove(id);
-      _owners.remove(id);
-    }
+    items.sort((a, b) => a.order.compareTo(b.order));
+    return items;
   }
 
-  List<ToolbarContribution> get all {
-    final list = _items.values.toList();
-    list.sort((a, b) => a.order.compareTo(b.order));
-    return list;
+  List<ToolbarContribution> forTargetAndAlignment({
+    required String targetId,
+    required ToolbarAlignment alignment,
+  }) {
+    return resolve(ToolbarContext(targetId: targetId), alignment);
   }
-
-  ToolbarContribution? get(String id) => _items[id];
 }

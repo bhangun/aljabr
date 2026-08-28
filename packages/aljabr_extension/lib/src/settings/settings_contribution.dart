@@ -1,19 +1,31 @@
 import 'package:flutter/widgets.dart';
+import '../extensions/contribution.dart';
 
-class SettingsContribution {
+typedef SettingsPageBuilder = Widget Function(BuildContext context);
+
+class SettingsPageContribution implements OwnedContribution {
+  @override
   final String id;
-  final String title;
-  final IconData? icon;
-  final String? category;
-  final int order;
-  final Widget Function(BuildContext context) builder;
 
-  const SettingsContribution({
+  @override
+  final String ownerId;
+
+  final String title;
+  final String section;
+  final IconData? icon;
+  final int order;
+  final SettingsPageBuilder builder;
+
+  const SettingsPageContribution({
     required this.id,
+    required this.ownerId,
     required this.title,
+    required this.section,
     this.icon,
-    this.category,
     this.order = 0,
     required this.builder,
   });
 }
+
+// Backward compatible alias
+typedef SettingsContribution = SettingsPageContribution;

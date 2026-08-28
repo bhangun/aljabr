@@ -10,7 +10,10 @@ import '../../../mock_backend_service.dart';
 
 class _RunningBackendProcessNotifier extends BackendProcessNotifier {
   @override
-  BackendState build() => BackendState(status: BackendStatus.running);
+  BackendState build() => const BackendState(
+        aljabr: SingleServerState(status: BackendStatus.running),
+        gollek: SingleServerState(status: BackendStatus.running),
+      );
 }
 
 void main() {

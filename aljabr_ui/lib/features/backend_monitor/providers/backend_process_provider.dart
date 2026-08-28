@@ -4,110 +4,106 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../utils/logger.dart';
+import '../services/backend_installer_service.dart';
 import '../../log/services/log_file_service.dart';
+import '../../../utils/logger.dart';
 
-enum BackendStatus { stopped, starting, running, error }
+enum BackendStatus {
+  stopped,
+  starting,
+  running,
+  error,
+}
 
-enum ServerType { aljabr, gollek, frontend }
+enum ServerType {
+  aljabr,
+  gollek,
+  frontend,
+}
 
-/// Information and process state for an individual server instance.
 class SingleServerState {
   final String name;
   final String description;
   final BackendStatus status;
-  final int httpPort;
-  final int? grpcPort;
   final int? pid;
   final DateTime? startedAt;
-  final List<String> logs;
   final String? lastError;
+  final List<String> logs;
 
   const SingleServerState({
-    required this.name,
-    required this.description,
+    this.name = '',
+    this.description = '',
     this.status = BackendStatus.stopped,
-    required this.httpPort,
-    this.grpcPort,
     this.pid,
     this.startedAt,
-    this.logs = const [],
     this.lastError,
+    this.logs = const [],
   });
 
-  Duration? get uptime =>
-      startedAt != null ? DateTime.now().difference(startedAt!) : null;
+  Duration get uptime =>
+      startedAt != null ? DateTime.now().difference(startedAt!) : Duration.zero;
 
   SingleServerState copyWith({
     String? name,
     String? description,
     BackendStatus? status,
-    int? httpPort,
-    int? grpcPort,
     int? pid,
     DateTime? startedAt,
-    List<String>? logs,
     String? lastError,
+    List<String>? logs,
   }) {
     return SingleServerState(
       name: name ?? this.name,
       description: description ?? this.description,
       status: status ?? this.status,
-      httpPort: httpPort ?? this.httpPort,
-      grpcPort: grpcPort ?? this.grpcPort,
       pid: pid ?? this.pid,
       startedAt: startedAt ?? this.startedAt,
+      lastError: lastError ?? this.lastError,
       logs: logs ?? this.logs,
-      lastError: lastError,
     );
   }
 }
 
-const _defaultAljabr = SingleServerState(
-  name: 'Aljabr Agent & Substrate',
-  description: 'Autonomous Coding Engine, LSP Kernel & API',
-  httpPort: 8085,
-  grpcPort: 9000,
-);
-
-const _defaultGollek = SingleServerState(
-  name: 'Gollek Inference Server',
-  description: 'Local Neural Compute, Model Runner & KV Cache',
-  httpPort: 8080,
-  grpcPort: 9131,
-);
-
-const _defaultFrontend = SingleServerState(
-  name: 'Aljabr UI',
-  description: 'Flutter Desktop Client, View State & Network Bridge',
-  httpPort: 0,
-  status: BackendStatus.running,
-);
-
-/// Unified Dual-Backend & Frontend state managing Aljabr Platform, Gollek Inference Server, and Aljabr UI.
 class BackendState {
   final SingleServerState aljabr;
   final SingleServerState gollek;
   final SingleServerState frontend;
   final List<String> logs;
-  final String activeLogTab; // 'all' | 'aljabr' | 'gollek' | 'frontend'
+  final String activeLogTab; // 'all', 'aljabr', 'gollek', 'frontend'
 
-  BackendState({
-    BackendStatus? status,
-    SingleServerState? aljabr,
-    SingleServerState? gollek,
-    SingleServerState? frontend,
+  const BackendState({
+    this.aljabr = const SingleServerState(
+      name: 'Aljabr Platform',
+      description: 'Autonomous Coding Agent & Workflow Substrate',
+    ),
+    this.gollek = const SingleServerState(
+      name: 'Gollek Inference',
+      description: 'High-Performance Local Neural LLM Engine',
+    ),
+    this.frontend = const SingleServerState(
+      name: 'Aljabr Studio GUI',
+      description: 'Desktop Studio & Extensible IDE Shell',
+      status: BackendStatus.running,
+    ),
     this.logs = const [],
     this.activeLogTab = 'all',
-  })  : aljabr = aljabr ??
-            _defaultAljabr.copyWith(status: status ?? BackendStatus.stopped),
-        gollek = gollek ??
-            _defaultGollek.copyWith(status: status ?? BackendStatus.stopped),
-        frontend = frontend ?? _defaultFrontend;
+  });
 
-  /// Backward-compatible status getter:
-  /// If either is starting -> starting; if either is running -> running; if error -> error; else stopped.
-  BackendStatus get status {
+  bool get isAnyRunning =>
+      aljabr.status == BackendStatus.running ||
+      gollek.status == BackendStatus.running;
+
+  bool get isAllRunning =>
+      aljabr.status == BackendStatus.running &&
+      gollek.status == BackendStatus.running;
+
+  BackendStatus get status => overallStatus;
+
+  BackendStatus get overallStatus {
+    if (aljabr.status == BackendStatus.error ||
+        gollek.status == BackendStatus.error) {
+      return BackendStatus.error;
+    }
     if (aljabr.status == BackendStatus.starting ||
         gollek.status == BackendStatus.starting) {
       return BackendStatus.starting;
@@ -115,10 +111,6 @@ class BackendState {
     if (aljabr.status == BackendStatus.running ||
         gollek.status == BackendStatus.running) {
       return BackendStatus.running;
-    }
-    if (aljabr.status == BackendStatus.error ||
-        gollek.status == BackendStatus.error) {
-      return BackendStatus.error;
     }
     return BackendStatus.stopped;
   }
@@ -142,12 +134,87 @@ class BackendState {
   }
 }
 
-/// Dynamic Workspace & Path Resolver without any hardcoded paths.
+/// Lightweight parser for .env / .env.local configuration files.
+class DotEnvLoader {
+  static final Map<String, String> _envVars = {};
+  static bool _loaded = false;
+
+  static void ensureLoaded() {
+    if (_loaded) return;
+    _loaded = true;
+
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ??
+        '';
+
+    final probeDirs = <Directory>[
+      Directory.current.absolute,
+      File(Platform.resolvedExecutable).parent.absolute,
+    ];
+
+    final candidateLocations = <String>[
+      '${Directory.current.path}/.env',
+      '${Directory.current.path}/.env.local',
+      '${Directory.current.path}/.env.development',
+      '${Directory.current.path}/.env.production',
+      '$home/.aljabr/.env',
+      '$home/.wayang/.env',
+    ];
+
+    for (final startDir in probeDirs) {
+      Directory current = startDir;
+      for (int i = 0; i < 6; i++) {
+        candidateLocations.add('${current.path}/.env');
+        candidateLocations.add('${current.path}/.env.local');
+        candidateLocations.add('${current.path}/.env.development');
+        if (current.parent.path == current.path) break;
+        current = current.parent;
+      }
+    }
+
+    for (final loc in candidateLocations) {
+      final file = File(loc);
+      if (file.existsSync()) {
+        try {
+          final lines = file.readAsLinesSync();
+          for (final rawLine in lines) {
+            final line = rawLine.trim();
+            if (line.isEmpty || line.startsWith('#')) continue;
+            final idx = line.indexOf('=');
+            if (idx > 0) {
+              final key = line.substring(0, idx).trim();
+              var val = line.substring(idx + 1).trim();
+              if ((val.startsWith('"') && val.endsWith('"')) ||
+                  (val.startsWith("'") && val.endsWith("'"))) {
+                val = val.substring(1, val.length - 1);
+              }
+              _envVars.putIfAbsent(key, () => val);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
+  static String? get(String key) {
+    ensureLoaded();
+    return Platform.environment[key] ?? _envVars[key];
+  }
+
+  static Map<String, String> getAll() {
+    ensureLoaded();
+    return Map.unmodifiable(_envVars);
+  }
+}
+
+/// Dynamic Workspace & Path Resolver without hardcoded paths.
 class DynamicPathResolver {
   static String? _cachedWorkspaceRoot;
 
   static String get homeDir =>
-      Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '';
+      DotEnvLoader.get('HOME') ??
+      Platform.environment['USERPROFILE'] ??
+      '';
 
   static String expandPath(String path) {
     if (path.startsWith('~/')) {
@@ -166,14 +233,16 @@ class DynamicPathResolver {
       return _cachedWorkspaceRoot!;
     }
 
-    // 1. Check environment variables
+    // 1. Check environment variables & .env
     for (final envKey in [
+      'WAYANG_SOURCE_PATH',
       'WAYANG_HOME',
       'PROJECT_ROOT',
       'WORKSPACE_ROOT',
+      'ALJABR_SOURCE_PATH',
       'ALJABR_HOME'
     ]) {
-      final val = Platform.environment[envKey];
+      final val = DotEnvLoader.get(envKey);
       if (val != null && val.trim().isNotEmpty) {
         final expanded = expandPath(val.trim());
         if (Directory(expanded).existsSync()) {
@@ -192,21 +261,26 @@ class DynamicPathResolver {
     for (final startDir in probeDirs) {
       Directory current = startDir;
       while (true) {
-        // Marker A: has Families and Wayang-Projects subdirectories
         final familiesDir = Directory('${current.path}/Families');
+        final projectsDir = Directory('${current.path}/Projects');
         final wayangProjectsDir = Directory('${current.path}/Wayang-Projects');
-        if (familiesDir.existsSync() && wayangProjectsDir.existsSync()) {
+        if (familiesDir.existsSync() &&
+            (projectsDir.existsSync() || wayangProjectsDir.existsSync())) {
           _cachedWorkspaceRoot = current.path;
           return current.path;
         }
 
-        // Marker B: inside Wayang-Agents/Aljabr
-        if (Directory('${current.path}/Backend/aljabr-api').existsSync()) {
-          // Check if parent 3 levels up is wayang-platform
-          final candidateRoot = current.parent.parent.parent;
-          if (Directory('${candidateRoot.path}/Families').existsSync()) {
-            _cachedWorkspaceRoot = candidateRoot.path;
-            return candidateRoot.path;
+        if (Directory('${current.path}/Community/Backend/aljabr-api').existsSync() ||
+            Directory('${current.path}/Backend/aljabr-api').existsSync()) {
+          Directory cand = current;
+          for (int i = 0; i < 4; i++) {
+            if (cand.parent.path == cand.path) break;
+            cand = cand.parent;
+            if (Directory('${cand.path}/Families').existsSync() ||
+                Directory('${cand.path}/Projects').existsSync()) {
+              _cachedWorkspaceRoot = cand.path;
+              return cand.path;
+            }
           }
         }
 
@@ -224,6 +298,7 @@ class DynamicPathResolver {
         '$home/Workspace/wayang-platform',
         '$home/Projects/wayang-platform',
         '$home/wayang-platform',
+        '$home/.wayang',
       ];
       for (final p in commonRelativePaths) {
         if (Directory(p).existsSync()) {
@@ -237,13 +312,37 @@ class DynamicPathResolver {
   }
 
   static String resolveAljabrApiDir() {
+    // 1. Explicit environment / .env configuration
+    final explicit = DotEnvLoader.get('ALJABR_SOURCE_PATH') ??
+        DotEnvLoader.get('ALJABR_HOME');
+    if (explicit != null && Directory(expandPath(explicit)).existsSync()) {
+      final exp = expandPath(explicit);
+      if (Directory('$exp/Community/Backend/aljabr-api').existsSync()) {
+        return '$exp/Community/Backend/aljabr-api';
+      }
+      if (Directory('$exp/Backend/aljabr-api').existsSync()) {
+        return '$exp/Backend/aljabr-api';
+      }
+      if (Directory('$exp/aljabr-api').existsSync()) {
+        return '$exp/aljabr-api';
+      }
+      return exp;
+    }
+
     final root = resolveWorkspaceRoot();
     final candidates = [
+      '$root/Projects/Wayang-Agents/Aljabr/Community/Backend/aljabr-api',
+      '$root/Projects/Wayang-Agents/Aljabr/Backend/aljabr-api',
+      '$root/Wayang-Projects/Wayang-Agents/Aljabr/Community/Backend/aljabr-api',
       '$root/Wayang-Projects/Wayang-Agents/Aljabr/Backend/aljabr-api',
       '$root/Wayang-Agents/Aljabr/Backend/aljabr-api',
+      '$root/Community/Backend/aljabr-api',
       '$root/Backend/aljabr-api',
       '$root/aljabr-api',
+      '${Directory.current.path}/../Community/Backend/aljabr-api',
       '${Directory.current.path}/../Backend/aljabr-api',
+      '$homeDir/.wayang/bin',
+      '$homeDir/.aljabr/bin',
     ];
 
     for (final c in candidates) {
@@ -253,11 +352,19 @@ class DynamicPathResolver {
   }
 
   static String resolveGollekDir() {
+    final explicit = DotEnvLoader.get('GOLLEK_SOURCE_PATH') ??
+        DotEnvLoader.get('GOLLEK_HOME');
+    if (explicit != null && Directory(expandPath(explicit)).existsSync()) {
+      return expandPath(explicit);
+    }
+
     final root = resolveWorkspaceRoot();
     final candidates = [
       '$root/Families/gollek',
+      '$root/Projects/gollek',
       '$root/gollek',
       '${Directory.current.path}/../../../../Families/gollek',
+      '$homeDir/.gollek',
     ];
 
     for (final c in candidates) {
@@ -270,32 +377,34 @@ class DynamicPathResolver {
 class BackendProcessNotifier extends Notifier<BackendState> {
   Process? _aljabrProcess;
   Process? _gollekProcess;
+
   @override
   BackendState build() {
-    // Register frontend UI logger stream
+    DotEnvLoader.ensureLoaded();
+
     registerFrontendLogListener((level, message, formattedLine) {
       _appendLog('[$level] $message', ServerType.frontend);
     });
 
-    // Populate initial logs with existing recent frontend logs
     final recent = getRecentFrontendLogs();
     final initialFrontendLogs = List<String>.from(recent);
     final initialLogs = List<String>.from(recent);
 
     final initialState = BackendState(
-      frontend: _defaultFrontend.copyWith(logs: initialFrontendLogs),
+      frontend: const SingleServerState(
+        name: 'Aljabr Studio GUI',
+        description: 'Desktop Studio & Extensible IDE Shell',
+        status: BackendStatus.running,
+      ).copyWith(logs: initialFrontendLogs),
       logs: initialLogs,
     );
 
-    // Probe backends on startup so providers can fetch immediately
     Future.microtask(probeServers);
     return initialState;
   }
 
-  /// Automatically probe port listeners to detect if backends are already running.
   Future<void> probeServers() async {
     try {
-      // 1. Probe Aljabr (port 8085 / 9000)
       final aljabrRunning =
           await _isPortListening(8085) || await _isPortListening(9000);
       if (aljabrRunning && state.aljabr.status != BackendStatus.running) {
@@ -316,7 +425,6 @@ class BackendProcessNotifier extends Notifier<BackendState> {
         );
       }
 
-      // 2. Probe Gollek (gRPC 9131 / HTTP 8080 / 8082)
       final gollekRunning = await _isPortListening(9131) ||
           await _isPortListening(8080) ||
           await _isPortListening(8082);
@@ -376,19 +484,29 @@ class BackendProcessNotifier extends Notifier<BackendState> {
     try {
       final aljabrDir = DynamicPathResolver.resolveAljabrApiDir();
       final scriptFile = File('$aljabrDir/start-local.sh');
+      final binaryFile = File('$aljabrDir/wayang');
+      final jarFile = File('$aljabrDir/target/quarkus-app/quarkus-run.jar');
 
       String executable;
       List<String> arguments;
+      String workingDir = aljabrDir;
 
       if (scriptFile.existsSync()) {
         executable = '/bin/bash';
         arguments = [scriptFile.path];
+      } else if (binaryFile.existsSync()) {
+        executable = binaryFile.path;
+        arguments = [];
+      } else if (jarFile.existsSync()) {
+        executable = 'java';
+        arguments = ['-Dquarkus.http.port=8085', '-Dquarkus.grpc.server.port=9000', '-jar', jarFile.path];
       } else {
-        executable = 'mvn';
+        final mvnPath = await _resolveExecutable('mvn');
+        executable = mvnPath ?? 'mvn';
         arguments = ['quarkus:dev', '-o', '-Dquarkus.http.port=8085'];
       }
 
-      _appendLog('• Working Directory: $aljabrDir', ServerType.aljabr);
+      _appendLog('• Working Directory: $workingDir', ServerType.aljabr);
       _appendLog(
           '• Command: $executable ${arguments.join(' ')}', ServerType.aljabr);
 
@@ -397,7 +515,7 @@ class BackendProcessNotifier extends Notifier<BackendState> {
       _aljabrProcess = await Process.start(
         executable,
         arguments,
-        workingDirectory: aljabrDir,
+        workingDirectory: Directory(workingDir).existsSync() ? workingDir : null,
         environment: env,
       );
 
@@ -416,6 +534,7 @@ class BackendProcessNotifier extends Notifier<BackendState> {
         _appendLog(line, ServerType.aljabr);
         if (state.aljabr.status == BackendStatus.starting &&
             (line.contains('Listening on: http://localhost:8085') ||
+                line.contains('8085') ||
                 line.contains('Installed features:'))) {
           state = state.copyWith(
             aljabr: state.aljabr.copyWith(status: BackendStatus.running),
@@ -472,7 +591,6 @@ class BackendProcessNotifier extends Notifier<BackendState> {
       _aljabrProcess!.kill();
       _aljabrProcess = null;
     }
-    // Cleanly kill any lingering process on Aljabr ports (8085, 9000)
     try {
       await Process.run('sh', [
         '-c',
@@ -506,22 +624,41 @@ class BackendProcessNotifier extends Notifier<BackendState> {
     try {
       final root = DynamicPathResolver.resolveWorkspaceRoot();
       final gollekDir = DynamicPathResolver.resolveGollekDir();
-      final scriptFile = File(
-          '$root/Wayang-Projects/Wayang-Agents/Aljabr/Backend/start-gollek.sh');
+
+      final scriptCandidates = [
+        '$root/Projects/Wayang-Agents/Aljabr/Community/Backend/start-gollek.sh',
+        '$root/Projects/Wayang-Agents/Aljabr/Backend/start-gollek.sh',
+        '$root/Wayang-Projects/Wayang-Agents/Aljabr/Community/Backend/start-gollek.sh',
+        '$root/Wayang-Projects/Wayang-Agents/Aljabr/Backend/start-gollek.sh',
+        '$gollekDir/scripts/run-dev-server.sh',
+        '$gollekDir/start-dev-server.sh',
+      ];
+
+      File? scriptFile;
+      for (final p in scriptCandidates) {
+        if (File(p).existsSync()) {
+          scriptFile = File(p);
+          break;
+        }
+      }
 
       String executable;
       List<String> arguments;
       String workDir;
 
-      if (scriptFile.existsSync()) {
-        // Preferred: delegate to the official start-gollek.sh launcher
+      if (scriptFile != null) {
         executable = '/bin/bash';
         arguments = [scriptFile.path];
         workDir = scriptFile.parent.path;
       } else {
-        // Fallback: run the pre-built gollek.jar directly with `serve --rest --port=8080`
         final jarFile = File('$gollekDir/ui/gollek-cli/build/gollek.jar');
-        if (jarFile.existsSync()) {
+        final binaryFile = File('${DynamicPathResolver.homeDir}/.gollek/bin/gollek');
+
+        if (binaryFile.existsSync()) {
+          executable = binaryFile.path;
+          arguments = [];
+          workDir = binaryFile.parent.path;
+        } else if (jarFile.existsSync()) {
           executable = 'java';
           arguments = [
             '--enable-native-access=ALL-UNNAMED',
@@ -544,7 +681,7 @@ class BackendProcessNotifier extends Notifier<BackendState> {
               '❌ Gollek: no start-gollek.sh, no gollek.jar, no gradlew found.',
               ServerType.gollek);
           _appendLog(
-              '   Please build Gollek first: cd Families/gollek && ./scripts/build-gollek.sh',
+              '   Please build Gollek or run automatic setup from onboarding dialog.',
               ServerType.gollek);
           return;
         }
@@ -559,7 +696,7 @@ class BackendProcessNotifier extends Notifier<BackendState> {
       _gollekProcess = await Process.start(
         executable,
         arguments,
-        workingDirectory: workDir,
+        workingDirectory: Directory(workDir).existsSync() ? workDir : null,
         environment: env,
       );
 
@@ -638,7 +775,7 @@ class BackendProcessNotifier extends Notifier<BackendState> {
     try {
       await Process.run('sh', [
         '-c',
-        'lsof -n -P -tiTCP:8080,8082,9090 -sTCP:LISTEN | xargs kill -9 2>/dev/null'
+        'lsof -n -P -tiTCP:8080,8082,9090,9131 -sTCP:LISTEN | xargs kill -9 2>/dev/null'
       ]);
     } catch (_) {}
     state = state.copyWith(
@@ -654,21 +791,19 @@ class BackendProcessNotifier extends Notifier<BackendState> {
 
   // ── Master Controls (Ordered Boot Sequence) ──────────────────────────────
 
-  /// Starts backends in strict dependency order: Gollek (Inference) -> Aljabr (Platform).
   Future<void> startAll() async {
     _appendLog('⚙️ Initiating ordered dual-backend startup sequence...', null);
 
-    // Step 1: Boot Gollek Inference Server
     if (state.gollek.status != BackendStatus.running) {
       _appendLog('▶️ [Step 1/2] Starting Gollek Inference Substrate (:8080)...',
           ServerType.gollek);
       await startGollek();
 
-      // Give Gollek a brief grace window to bind socket
       for (int i = 0; i < 20; i++) {
         if (state.gollek.status == BackendStatus.running ||
             await _isPortListening(8080) ||
-            await _isPortListening(8082)) {
+            await _isPortListening(8082) ||
+            await _isPortListening(9131)) {
           _appendLog('✅ Gollek Inference Engine is active and ready.',
               ServerType.gollek);
           break;
@@ -677,7 +812,6 @@ class BackendProcessNotifier extends Notifier<BackendState> {
       }
     }
 
-    // Step 2: Boot Aljabr Agent & Substrate Backend
     if (state.aljabr.status != BackendStatus.running) {
       _appendLog(
           '▶️ [Step 2/2] Starting Aljabr Agent Platform (:8085 / :9000)...',
@@ -691,13 +825,9 @@ class BackendProcessNotifier extends Notifier<BackendState> {
     await Future.wait([stopAljabr(), stopGollek()]);
   }
 
-  /// Backward-compatible alias for existing callers
   Future<void> startBackend() => startAll();
 
-  /// Backward-compatible alias for existing callers
   Future<void> stopBackend() => stopAll();
-
-  // ── Tab & Log Management ──────────────────────────────────────────────────
 
   void setActiveLogTab(String tab) {
     state = state.copyWith(activeLogTab: tab);
@@ -726,17 +856,43 @@ class BackendProcessNotifier extends Notifier<BackendState> {
     }
   }
 
+  Future<String?> _resolveExecutable(String name) async {
+    try {
+      final res = await Process.run('which', [name]);
+      if (res.exitCode == 0 && res.stdout.toString().trim().isNotEmpty) {
+        return res.stdout.toString().trim();
+      }
+    } catch (_) {}
+
+    final standardPaths = [
+      '/opt/homebrew/bin/$name',
+      '/usr/local/bin/$name',
+      '/usr/bin/$name',
+      '${DynamicPathResolver.homeDir}/.local/bin/$name',
+    ];
+    for (final p in standardPaths) {
+      if (File(p).existsSync()) return p;
+    }
+    return null;
+  }
+
   Map<String, String> _buildEnvironment() {
     final home = DynamicPathResolver.homeDir;
-    final path = Platform.environment['PATH'] ??
-        '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
-    return {
+    final path = DotEnvLoader.get('PATH') ??
+        '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$home/.local/bin';
+    final env = <String, String>{
+      ...DotEnvLoader.getAll(),
       'HOME': home,
-      'USER': Platform.environment['USER'] ?? 'user',
+      'USER': DotEnvLoader.get('USER') ?? Platform.environment['USER'] ?? 'user',
       'PATH': path,
-      if (Platform.environment['JAVA_HOME'] != null)
-        'JAVA_HOME': Platform.environment['JAVA_HOME']!,
+      if (DotEnvLoader.get('JAVA_HOME') != null)
+        'JAVA_HOME': DotEnvLoader.get('JAVA_HOME')!,
+      if (DotEnvLoader.get('GGUF_CONTEXT_SIZE') != null)
+        'GGUF_CONTEXT_SIZE': DotEnvLoader.get('GGUF_CONTEXT_SIZE')!,
+      if (DotEnvLoader.get('ALJABR_MODE') != null)
+        'ALJABR_MODE': DotEnvLoader.get('ALJABR_MODE')!,
     };
+    return env;
   }
 
   void _appendLog(String text, ServerType? origin) {
@@ -759,7 +915,6 @@ class BackendProcessNotifier extends Notifier<BackendState> {
       logRaw(formattedLine);
       LogFileService.logServer(formattedLine);
 
-      // Add to unified logs (capped at 1500 lines)
       final newLogs = List<String>.from(state.logs)..add(formattedLine);
       if (newLogs.length > 1500) {
         newLogs.removeRange(0, newLogs.length - 1500);

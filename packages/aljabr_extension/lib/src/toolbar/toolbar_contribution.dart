@@ -1,21 +1,44 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
-import '../commands/command_context.dart';
+import '../extensions/contribution.dart';
+import 'toolbar_alignment.dart';
+import 'toolbar_context.dart';
 
-class ToolbarContribution {
+typedef ToolbarAction = FutureOr<void> Function(BuildContext context);
+typedef ToolbarWidgetBuilder = Widget Function(BuildContext context);
+
+class ToolbarContribution implements OwnedContribution {
+  @override
   final String id;
-  final String title;
-  final IconData icon;
-  final String? tooltip;
+
+  @override
+  final String ownerId;
+
+  final String targetId;
+  final ToolbarAlignment alignment;
+  final ToolbarItemKind kind;
   final int order;
-  final FutureOr<void> Function(CommandContext context)? action;
+  final String? tooltip;
+  final IconData? icon;
+  final String? commandId;
+  final ToolbarAction? action;
+  final ToolbarWidgetBuilder? builder;
+  final bool Function(ToolbarContext context)? isVisible;
+  final bool Function(ToolbarContext context)? isEnabled;
 
   const ToolbarContribution({
     required this.id,
-    required this.title,
-    required this.icon,
-    this.tooltip,
+    required this.ownerId,
+    this.targetId = ToolbarTargets.app,
+    this.alignment = ToolbarAlignment.start,
+    this.kind = ToolbarItemKind.action,
     this.order = 0,
+    this.tooltip,
+    this.icon,
+    this.commandId,
     this.action,
+    this.builder,
+    this.isVisible,
+    this.isEnabled,
   });
 }

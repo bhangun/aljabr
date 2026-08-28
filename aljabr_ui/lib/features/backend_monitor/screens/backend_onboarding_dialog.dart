@@ -76,8 +76,8 @@ class _BackendOnboardingDialogState
         side: const BorderSide(color: AppTheme.border, width: 1.2),
       ),
       child: Container(
-        width: 820,
-        height: 580,
+        width: 840,
+        height: 600,
         decoration: BoxDecoration(
           color: AppTheme.background,
           borderRadius: BorderRadius.circular(16),
@@ -121,7 +121,7 @@ class _BackendOnboardingDialogState
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Local AI Inference (Gollek) & Agentic Coding Engine (Wayang/Aljabr)',
+                        'Local AI Inference (Gollek) & Autonomous Coding Platform (Wayang / Aljabr)',
                         style: TextStyle(
                           color: AppTheme.textSecondary,
                           fontSize: 12,
@@ -186,7 +186,7 @@ class _BackendOnboardingDialogState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'First-Run Environment Inspection',
+          'Environment & Dependency Verification',
           style: TextStyle(
             color: AppTheme.textPrimary,
             fontSize: 15,
@@ -195,10 +195,10 @@ class _BackendOnboardingDialogState
         ),
         const SizedBox(height: 4),
         const Text(
-          'Aljabr Studio requires the dual-substrate backend (Gollek + Wayang) to run local neural inference and autonomous coding agent loops.',
+          'Aljabr Studio coordinates local neural inference (Gollek) with autonomous coding agent backends (Wayang/Aljabr).',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 12.5),
         ),
-        const Gap(16),
+        const Gap(14),
 
         // System Specs Grid
         Container(
@@ -212,43 +212,73 @@ class _BackendOnboardingDialogState
             children: [
               _SpecRow(
                 icon: Icons.computer_rounded,
-                label: 'Host Platform',
+                label: 'Host Platform & Mode',
                 value:
-                    '${info.systemSpecs.os.toUpperCase()} (${info.systemSpecs.architecture})',
+                    '${info.systemSpecs.os.toUpperCase()} (${info.systemSpecs.architecture}) • ${info.isDevMode ? "Dev Mode" : "Production Mode"}',
               ),
-              const Divider(height: 14, color: AppTheme.border),
+              const Divider(height: 12, color: AppTheme.border),
               _SpecRow(
                 icon: Icons.memory_rounded,
-                label: 'Hardware Compute',
+                label: 'Hardware Acceleration',
                 value: info.systemSpecs.hardwareAcceleration,
                 isAccent: true,
               ),
-              const Divider(height: 14, color: AppTheme.border),
+              const Divider(height: 12, color: AppTheme.border),
               _SpecRow(
                 icon: Icons.code_rounded,
-                label: 'Java Runtime Environment',
+                label: 'Java Runtime (JDK 21+)',
                 value: info.systemSpecs.hasJava
                     ? (info.systemSpecs.javaVersion ?? 'JDK Active')
-                    : 'Not Detected (Auto-provisioned)',
+                    : 'Missing (Auto-provision or Install)',
+                statusColor: info.systemSpecs.hasJava ? Colors.green : Colors.orange,
               ),
-              const Divider(height: 14, color: AppTheme.border),
+              const Divider(height: 12, color: AppTheme.border),
               _SpecRow(
                 icon: Icons.layers_outlined,
                 label: 'Backend Substrates Status',
                 value: info.isFullyInstalled
-                    ? 'Both Backends Located'
+                    ? 'Both Substrates Located'
                     : info.isPartiallyInstalled
                         ? 'Partially Located'
-                        : 'Not Installed Yet',
+                        : 'Not Installed Yet (Release Bundles Available)',
                 statusColor: info.isFullyInstalled
                     ? Colors.green
                     : info.isPartiallyInstalled
                         ? Colors.orange
-                        : Colors.red,
+                        : const Color(0xFF58A6FF),
               ),
             ],
           ),
         ),
+
+        const Gap(12),
+
+        // Missing dependency warnings (Java/Docker)
+        if (!info.systemSpecs.hasJava)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.amber),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Java runtime not detected. Auto-install can bundle Java or you can install via Homebrew/Adoptium.',
+                    style: TextStyle(color: Colors.amber, fontSize: 11.5),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _currentStep = 1),
+                  child: const Text('View Commands', style: TextStyle(fontSize: 11.5)),
+                ),
+              ],
+            ),
+          ),
 
         const Spacer(),
 
@@ -287,13 +317,13 @@ class _BackendOnboardingDialogState
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
-                child: const Text('Manual Install / Link'),
+                child: const Text('Manual Install / Link Source'),
               ),
               const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: _startAutoInstall,
                 icon: const Icon(Icons.download_rounded, size: 18),
-                label: const Text('1-Click Auto Install (Recommended)'),
+                label: const Text('1-Click Auto Install (GitHub Releases)'),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF238636),
                   padding:
@@ -312,148 +342,129 @@ class _BackendOnboardingDialogState
   Widget _buildManualOrChoiceStep(BackendInstallationInfo info) {
     final installer = ref.read(backendInstallerServiceProvider);
     final command = installer.getManualInstallCommand();
+    final javaCmd = installer.getJavaInstallCommand();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back_rounded,
-                  size: 18, color: AppTheme.textSecondary),
-              onPressed: () => setState(() => _currentStep = 0),
-            ),
-            const SizedBox(width: 6),
-            const Text(
-              'Manual Installation & Linking',
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Terminal command box
-        const Text(
-          'Option A: Run the multi-platform setup script in your terminal:',
-          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0D1117),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppTheme.border),
-          ),
-          child: Row(
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Expanded(
-                child: SelectableText(
-                  command,
-                  style: const TextStyle(
-                    color: Color(0xFF79C0FF),
-                    fontFamily: 'monospace',
-                    fontSize: 11.5,
-                  ),
-                ),
-              ),
               IconButton(
-                tooltip: 'Copy Command',
-                icon: const Icon(Icons.copy_rounded,
-                    size: 16, color: AppTheme.textMuted),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: command));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Installation command copied!')),
-                  );
-                },
+                icon: const Icon(Icons.arrow_back_rounded,
+                    size: 18, color: AppTheme.textSecondary),
+                onPressed: () => setState(() => _currentStep = 0),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'Manual Setup & Source Configuration',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 8),
 
-        const Gap(16),
+          // Option A: Quick terminal command
+          const Text(
+            'Option A: One-line release installer (Terminal):',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          _TerminalBox(command: command),
 
-        // Custom path link box
-        const Text(
-          'Option B: Link existing local directory or custom repository:',
-          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _customPathController,
-                style:
-                    const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'e.g. /path/to/wayang-platform',
-                  hintStyle:
-                      const TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                  errorText: _customPathError,
-                  filled: true,
-                  fillColor: AppTheme.panelAlt,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppTheme.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppTheme.border),
+          const Gap(14),
+
+          // Option B: Java dependency
+          if (!info.systemSpecs.hasJava) ...[
+            const Text(
+              'Install OpenJDK (Java 21+):',
+              style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            _TerminalBox(command: javaCmd),
+            const Gap(14),
+          ],
+
+          // Option C: Custom local source repository linking
+          const Text(
+            'Option C: Link existing local repository (Development Mode):',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customPathController,
+                  style:
+                      const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. /path/to/wayang-platform',
+                    hintStyle:
+                        const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                    errorText: _customPathError,
+                    filled: true,
+                    fillColor: AppTheme.panelAlt,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppTheme.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppTheme.border),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            ElevatedButton(
-              onPressed: () {
-                final path = _customPathController.text.trim();
-                if (Directory(path).existsSync()) {
-                  setState(() {
-                    _customPathError = null;
-                    _currentStep = 3;
-                  });
-                } else {
-                  setState(() {
-                    _customPathError = 'Directory does not exist';
-                  });
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accent,
-                foregroundColor: Colors.black,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () {
+                  final path = _customPathController.text.trim();
+                  if (Directory(path).existsSync()) {
+                    setState(() {
+                      _customPathError = null;
+                      _currentStep = 3;
+                    });
+                  } else {
+                    setState(() {
+                      _customPathError = 'Directory does not exist';
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accent,
+                  foregroundColor: Colors.black,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+                child: const Text('Verify & Link'),
               ),
-              child: const Text('Verify & Link'),
-            ),
-          ],
-        ),
+            ],
+          ),
 
-        const Spacer(),
+          const Gap(16),
 
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            FilledButton.icon(
-              onPressed: _startAutoInstall,
-              icon: const Icon(Icons.download_rounded, size: 16),
-              label: const Text('Switch to 1-Click Auto Install'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF238636),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              FilledButton.icon(
+                onPressed: _startAutoInstall,
+                icon: const Icon(Icons.download_rounded, size: 16),
+                label: const Text('Run 1-Click Auto Install'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF238636),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -573,6 +584,50 @@ class _BackendOnboardingDialogState
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TerminalBox extends StatelessWidget {
+  final String command;
+
+  const _TerminalBox({required this.command});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1117),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SelectableText(
+              command,
+              style: const TextStyle(
+                color: Color(0xFF79C0FF),
+                fontFamily: 'monospace',
+                fontSize: 11.5,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Copy Command',
+            icon: const Icon(Icons.copy_rounded,
+                size: 16, color: AppTheme.textMuted),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: command));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text('Command copied to clipboard!')),
+              );
+            },
           ),
         ],
       ),

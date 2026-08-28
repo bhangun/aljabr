@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:aljabr/core/commands/command_registry.dart';
+import 'package:aljabr_extension/aljabr_extension.dart';
 import 'package:aljabr/core/commands/command_palette_dialog.dart';
 
 void main() {
   testWidgets('CommandPaletteDialog filters commands based on search query', (tester) async {
     final registry = CommandRegistry();
+    registry.register(const AppCommand(id: 'file.save', title: 'File: Save', category: 'File'));
+    registry.register(const AppCommand(id: 'agent.ask', title: 'Aljabr: Ask Agent', category: 'Agent'));
+    registry.register(const AppCommand(id: 'view.terminal', title: 'View: Toggle Integrated Terminal', category: 'View'));
 
     await tester.pumpWidget(
       MaterialApp(

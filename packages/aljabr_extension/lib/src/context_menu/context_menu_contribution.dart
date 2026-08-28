@@ -1,21 +1,41 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
-import '../commands/command_context.dart';
+import '../extensions/contribution.dart';
+import 'menu_context.dart';
 
-class ContextMenuContribution {
+typedef MenuVisibilityPredicate = bool Function(MenuContext context);
+typedef MenuEnabledPredicate = bool Function(MenuContext context);
+typedef MenuAction = FutureOr<void> Function(MenuContext context);
+
+class MenuContribution implements OwnedContribution {
+  @override
   final String id;
-  final String location;
-  final String title;
+
+  @override
+  final String ownerId;
+
+  final String targetId;
+  final String label;
   final IconData? icon;
   final int order;
-  final FutureOr<void> Function(CommandContext context)? action;
+  final String? group;
+  final MenuVisibilityPredicate? isVisible;
+  final MenuEnabledPredicate? isEnabled;
+  final MenuAction action;
 
-  const ContextMenuContribution({
+  const MenuContribution({
     required this.id,
-    required this.location,
-    required this.title,
+    required this.ownerId,
+    required this.targetId,
+    required this.label,
+    required this.action,
     this.icon,
     this.order = 0,
-    this.action,
+    this.group,
+    this.isVisible,
+    this.isEnabled,
   });
 }
+
+// Backward compatible alias
+typedef ContextMenuContribution = MenuContribution;

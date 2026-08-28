@@ -1,8 +1,14 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
+import '../extensions/contribution.dart';
 
-class NavigationContribution {
+class NavigationContribution implements OwnedContribution {
+  @override
   final String id;
+
+  @override
+  final String ownerId;
+
   final String groupId;
   final String label;
   final IconData? icon;
@@ -12,6 +18,7 @@ class NavigationContribution {
 
   const NavigationContribution({
     required this.id,
+    required this.ownerId,
     required this.groupId,
     required this.label,
     this.icon,

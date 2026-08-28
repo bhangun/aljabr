@@ -8,15 +8,42 @@ class EditorModule implements AljabrModule {
 
   @override
   Future<void> activate(ModuleContext context) async {
-    context.views.register(
+    context.registerView(
       ViewContribution(
         id: 'aljabr.editor.panel',
+        ownerId: id,
         title: 'Editor',
         icon: Icons.code,
-        defaultRegion: UiRegion.mainWorkbench, // Both chat and editor are main for now
+        defaultRegion: UiRegion.mainWorkbench,
         builder: (_) => const EditorPanelShell(),
       ),
-      ownerId: id,
+    );
+
+    // Editor Context Menu items (Copy, Format, Ask)
+    context.registerContextMenuItem(
+      MenuContribution(
+        id: 'aljabr.editor.copy',
+        ownerId: id,
+        targetId: MenuTargets.editor,
+        label: 'Copy',
+        icon: Icons.copy_outlined,
+        group: 'clipboard',
+        order: 100,
+        action: (ctx) {},
+      ),
+    );
+
+    context.registerContextMenuItem(
+      MenuContribution(
+        id: 'aljabr.editor.format',
+        ownerId: id,
+        targetId: MenuTargets.editor,
+        label: 'Format Document',
+        icon: Icons.format_align_left_rounded,
+        group: 'edit',
+        order: 200,
+        action: (ctx) {},
+      ),
     );
   }
 

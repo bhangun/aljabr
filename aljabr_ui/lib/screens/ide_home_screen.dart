@@ -4,6 +4,8 @@ import '../theme/app_colors.dart';
 import '../widgets/sidebar/sidebar_widget.dart';
 import 'package:aljabr_extension/aljabr_extension.dart';
 import '../widgets/extension_region_host.dart';
+import '../widgets/app_toolbar.dart';
+import '../widgets/app_status_bar.dart';
 import '../features/chat/widgets/chat/chat_panel.dart';
 import '../features/editor/widgets/editor_panel_shell.dart';
 
@@ -19,9 +21,8 @@ class _OpenCommandPaletteIntent extends Intent {
   const _OpenCommandPaletteIntent();
 }
 
-/// Composes the three modular columns from the reference screenshot:
-/// sidebar | chat panel | code editor panel. Falls back to a tabbed
-/// layout on narrow (mobile) widths so the same widgets are reusable there.
+/// Composes the extensible shell:
+/// Top Toolbar | (Sidebar | Main Workbench) | Status Bar
 class IdeHomeScreen extends ConsumerStatefulWidget {
   const IdeHomeScreen({super.key});
 
@@ -30,7 +31,6 @@ class IdeHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _IdeHomeScreenState extends ConsumerState<IdeHomeScreen> {
-
   @override
   void initState() {
     super.initState();
@@ -42,24 +42,23 @@ class _IdeHomeScreenState extends ConsumerState<IdeHomeScreen> {
   void _openCommandPalette() {
     showDialog(
       context: context,
-      builder: (context) => CommandPaletteDialog(registry: ref.read(commandRegistryProvider)),
+      builder: (context) => CommandPaletteDialog(
+        registry: ref.read(commandRegistryProvider),
+      ),
     );
   }
 
   Future<void> _checkBackendAndOnboard() async {
     try {
-      final info = await ref.read(backendDetectionProvider.future);
-      if (!mounted) return;
-
-      if (!info.isFullyInstalled) {
-        // Show setup wizard if backends are not fully installed
+      final info =
+          await ref.read(backendInstallerServiceProvider).detectInstallation();
+      if (!info.isFullyInstalled && mounted) {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (_) => const BackendOnboardingDialog(),
+          builder: (context) => const BackendOnboardingDialog(),
         );
       } else {
-        // Automatically start backends in order (Gollek -> Aljabr)
         ref.read(backendProcessProvider.notifier).startAll();
       }
     } catch (_) {}
@@ -84,20 +83,32 @@ class _IdeHomeScreenState extends ConsumerState<IdeHomeScreen> {
           autofocus: true,
           child: Scaffold(
             backgroundColor: AppTheme.background,
-            body: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 900;
-                if (isWide) {
-                  return const Row(
-                    children: [
-                      SidebarWidget(),
-                      VerticalDivider(width: 1),
-                      Expanded(child: ExtensionRegionHost(region: UiRegion.mainWorkbench)),
-                    ],
-                  );
-                }
-                return const _NarrowLayout();
-              },
+            body: Column(
+              children: [
+                const AppToolbar(),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 900;
+                      if (isWide) {
+                        return const Row(
+                          children: [
+                            SidebarWidget(),
+                            VerticalDivider(width: 1),
+                            Expanded(
+                              child: ExtensionRegionHost(
+                                region: UiRegion.mainWorkbench,
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                      return const _NarrowLayout();
+                    },
+                  ),
+                ),
+                const AppStatusBar(),
+              ],
             ),
           ),
         ),
@@ -114,7 +125,7 @@ class _NarrowLayout extends StatefulWidget {
 }
 
 class _NarrowLayoutState extends State<_NarrowLayout> {
-  int _tab = 1; // default to chat, like the reference screenshot
+  int _tab = 1;
 
   @override
   Widget build(BuildContext context) {
