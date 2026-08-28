@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_colors.dart';
+import '../widgets/activity_bar/activity_bar_widget.dart';
 import '../widgets/sidebar/sidebar_widget.dart';
 import 'package:aljabr_extension/aljabr_extension.dart';
 import '../widgets/extension_region_host.dart';
@@ -21,8 +22,8 @@ class _OpenCommandPaletteIntent extends Intent {
   const _OpenCommandPaletteIntent();
 }
 
-/// Composes the extensible shell:
-/// Top Toolbar | (Sidebar | Main Workbench) | Status Bar
+/// Composes the complete extensible shell:
+/// Top Toolbar | (Activity Bar | Sidebar | Main Workbench) | Status Bar
 class IdeHomeScreen extends ConsumerStatefulWidget {
   const IdeHomeScreen({super.key});
 
@@ -93,6 +94,7 @@ class _IdeHomeScreenState extends ConsumerState<IdeHomeScreen> {
                       if (isWide) {
                         return const Row(
                           children: [
+                            ActivityBarWidget(),
                             SidebarWidget(),
                             VerticalDivider(width: 1),
                             Expanded(

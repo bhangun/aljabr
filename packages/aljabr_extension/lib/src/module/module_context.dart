@@ -12,6 +12,14 @@ import '../toolbar/toolbar_contribution.dart';
 import '../toolbar/toolbar_registry.dart';
 import '../status_bar/status_bar_contribution.dart';
 import '../status_bar/status_bar_registry.dart';
+import '../capabilities/capability.dart';
+import '../capabilities/capability_registry.dart';
+import '../events/event_bus.dart';
+import '../services/service_registry.dart';
+import '../tools/agent_tool.dart';
+import '../tools/tool_registry.dart';
+import '../activity_bar/activity_bar_contribution.dart';
+import '../activity_bar/activity_bar_registry.dart';
 import '../extensions/contribution_scope.dart';
 import '../extensions/extension_runtime.dart';
 
@@ -34,6 +42,11 @@ class ModuleContext {
   ContextMenuRegistry get contextMenus => runtime.contextMenus;
   ToolbarRegistry get toolbar => runtime.toolbar;
   StatusBarRegistry get statusBar => runtime.statusBar;
+  CapabilityRegistry get capabilities => runtime.capabilities;
+  EventBus get events => runtime.events;
+  ServiceRegistry get services => runtime.services;
+  ToolRegistry get tools => runtime.tools;
+  ActivityBarRegistry get activityBar => runtime.activityBar;
 
   void registerCommand(AppCommand command) {
     commands.register(command, ownerId: moduleId);
@@ -61,5 +74,28 @@ class ModuleContext {
 
   void registerStatusBarItem(StatusBarContribution item) {
     contributions.register(statusBar, item);
+  }
+
+  void registerCapability(String capabilityId, {String description = ''}) {
+    contributions.register(
+      capabilities,
+      CapabilityContribution(
+        id: capabilityId,
+        ownerId: moduleId,
+        description: description,
+      ),
+    );
+  }
+
+  void registerService<T>(T service) {
+    services.register<T>(service, ownerId: moduleId);
+  }
+
+  void registerTool(AgentTool tool) {
+    contributions.register(tools, tool);
+  }
+
+  void registerActivityBarItem(ActivityBarContribution item) {
+    contributions.register(activityBar, item);
   }
 }

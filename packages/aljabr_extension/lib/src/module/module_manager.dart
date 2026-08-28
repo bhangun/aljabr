@@ -8,6 +8,11 @@ import '../settings/settings_registry.dart';
 import '../toolbar/toolbar_registry.dart';
 import '../context_menu/context_menu_registry.dart';
 import '../status_bar/status_bar_registry.dart';
+import '../capabilities/capability_registry.dart';
+import '../events/event_bus.dart';
+import '../services/service_registry.dart';
+import '../tools/tool_registry.dart';
+import '../activity_bar/activity_bar_registry.dart';
 import '../extensions/extension_runtime.dart';
 
 class ModuleManager {
@@ -24,6 +29,11 @@ class ModuleManager {
   ToolbarRegistry get toolbar => runtime.toolbar;
   ContextMenuRegistry get contextMenus => runtime.contextMenus;
   StatusBarRegistry get statusBar => runtime.statusBar;
+  CapabilityRegistry get capabilities => runtime.capabilities;
+  EventBus get events => runtime.events;
+  ServiceRegistry get services => runtime.services;
+  ToolRegistry get tools => runtime.tools;
+  ActivityBarRegistry get activityBar => runtime.activityBar;
 
   Future<void> activate(AljabrModule module) async {
     if (_activeModules.containsKey(module.id)) {

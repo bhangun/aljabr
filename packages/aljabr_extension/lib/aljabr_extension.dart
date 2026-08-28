@@ -36,6 +36,23 @@ export 'src/status_bar/status_bar_context.dart';
 export 'src/status_bar/status_bar_contribution.dart';
 export 'src/status_bar/status_bar_registry.dart';
 
+export 'src/capabilities/capability.dart';
+export 'src/capabilities/capability_registry.dart';
+
+export 'src/events/event_bus.dart';
+export 'src/events/core_events.dart';
+
+export 'src/services/service_registry.dart';
+
+export 'src/tools/agent_tool.dart';
+export 'src/tools/tool_registry.dart';
+
+export 'src/activity_bar/activity_bar_contribution.dart';
+export 'src/activity_bar/activity_bar_registry.dart';
+
+export 'src/plugins/extension_manifest.dart';
+export 'src/plugins/plugin_loader.dart';
+
 export 'src/module/aljabr_module.dart';
 export 'src/module/module_context.dart';
 export 'src/module/module_manager.dart';

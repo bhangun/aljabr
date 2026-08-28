@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:aljabr_extension/aljabr_extension.dart';
+import '../../features/settings/screens/settings_dialog.dart';
 
 class CoreNavigationModule implements AljabrModule {
   @override
@@ -11,6 +12,10 @@ class CoreNavigationModule implements AljabrModule {
     context.navigation.registerGroup(BuiltInNavigationGroups.workspace);
     context.navigation.registerGroup(BuiltInNavigationGroups.tools);
     context.navigation.registerGroup(BuiltInNavigationGroups.management);
+
+    // Capabilities
+    context.registerCapability('aljabr.core.navigation', description: 'Sidebar and multi-region navigation');
+    context.registerCapability('aljabr.core.workspace', description: 'Local project and file system integration');
 
     context.registerNavigation(
       NavigationContribution(
@@ -33,6 +38,55 @@ class CoreNavigationModule implements AljabrModule {
         icon: Icons.schedule,
         order: 20,
         action: (ctx) {},
+      ),
+    );
+
+    // Activity Bar Contributions (Far Left Rail)
+    context.registerActivityBarItem(
+      ActivityBarContribution(
+        id: 'aljabr.activity.explorer',
+        ownerId: id,
+        title: 'Explorer',
+        icon: Icons.folder_copy_outlined,
+        order: 10,
+      ),
+    );
+
+    context.registerActivityBarItem(
+      ActivityBarContribution(
+        id: 'aljabr.activity.history',
+        ownerId: id,
+        title: 'Timeline & History',
+        icon: Icons.history_rounded,
+        order: 20,
+      ),
+    );
+
+    context.registerActivityBarItem(
+      ActivityBarContribution(
+        id: 'aljabr.activity.extensions',
+        ownerId: id,
+        title: 'Extensions & Plugins',
+        icon: Icons.extension_outlined,
+        order: 30,
+      ),
+    );
+
+    context.registerActivityBarItem(
+      ActivityBarContribution(
+        id: 'aljabr.activity.settings',
+        ownerId: id,
+        title: 'Settings',
+        icon: Icons.settings_outlined,
+        placement: ActivityBarPlacement.bottom,
+        order: 100,
+        action: (ctx) {
+          showDialog(
+            context: ctx,
+            barrierDismissible: true,
+            builder: (_) => const SettingsDialog(),
+          );
+        },
       ),
     );
 

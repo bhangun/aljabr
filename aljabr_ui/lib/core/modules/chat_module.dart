@@ -12,6 +12,8 @@ class ChatModule implements AljabrModule {
 
   @override
   Future<void> activate(ModuleContext context) async {
+    context.registerCapability('aljabr.agent.chat', description: 'Autonomous agent chat and interactive reasoning');
+
     context.registerView(
       ViewContribution(
         id: viewId,
@@ -33,6 +35,17 @@ class ChatModule implements AljabrModule {
         viewId: viewId,
         order: 100,
         action: (ctx) {},
+      ),
+    );
+
+    // Activity Bar Center: Agent Chat icon
+    context.registerActivityBarItem(
+      ActivityBarContribution(
+        id: 'aljabr.activity.chat',
+        ownerId: id,
+        title: 'Aljabr Agent',
+        icon: Icons.auto_awesome_rounded,
+        order: 15,
       ),
     );
 

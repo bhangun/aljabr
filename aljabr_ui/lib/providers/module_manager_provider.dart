@@ -32,3 +32,23 @@ final contextMenuRegistryProvider = Provider<ContextMenuRegistry>((ref) {
 final statusBarRegistryProvider = Provider<StatusBarRegistry>((ref) {
   return ref.watch(moduleManagerProvider).statusBar;
 });
+
+final capabilityRegistryProvider = Provider<CapabilityRegistry>((ref) {
+  return ref.watch(moduleManagerProvider).capabilities;
+});
+
+final eventBusProvider = Provider<EventBus>((ref) {
+  return ref.watch(moduleManagerProvider).events;
+});
+
+final serviceRegistryProvider = Provider<ServiceRegistry>((ref) {
+  return ref.watch(moduleManagerProvider).services;
+});
+
+final toolRegistryProvider = Provider<ToolRegistry>((ref) {
+  return ref.watch(moduleManagerProvider).tools;
+});
+
+final activityBarRegistryProvider = Provider<ActivityBarRegistry>((ref) {
+  return ref.watch(moduleManagerProvider).activityBar;
+});
