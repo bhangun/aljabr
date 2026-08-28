@@ -1,0 +1,19 @@
+name: aljabr_plugin_runtime
+description: "Host runtime and contribution registries for Aljabr extensible plugins."
+version: 0.0.1
+homepage:
+
+environment:
+  sdk: ^3.13.2
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  aljabr_plugin_api:
+    path: ../aljabr_plugin_api
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0

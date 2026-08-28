@@ -8,13 +8,16 @@ class EditorModule implements AljabrModule {
 
   @override
   Future<void> activate(ModuleContext context) async {
+    context.registerCapability('aljabr.core.editor', description: 'Core multi-tab code editor');
+
     context.registerView(
       ViewContribution(
         id: 'aljabr.editor.panel',
         ownerId: id,
         title: 'Editor',
         icon: Icons.code,
-        defaultRegion: UiRegion.mainWorkbench,
+        preferredPlacement: ViewPlacement.main,
+        behavior: ViewBehavior.editor,
         builder: (_) => const EditorPanelShell(),
       ),
     );

@@ -4,7 +4,17 @@ import 'package:aljabr_extension/aljabr_extension.dart';
 import '../../providers/module_manager_provider.dart';
 import '../../theme/app_colors.dart';
 
-final activeActivityBarItemProvider = StateProvider<String?>((ref) => 'aljabr.activity.explorer');
+class ActiveActivityBarItemNotifier extends Notifier<String?> {
+  @override
+  String? build() => 'aljabr.activity.explorer';
+
+  void select(String? id) => state = id;
+}
+
+final activeActivityBarItemProvider =
+    NotifierProvider<ActiveActivityBarItemNotifier, String?>(
+  () => ActiveActivityBarItemNotifier(),
+);
 
 class ActivityBarWidget extends ConsumerWidget {
   const ActivityBarWidget({super.key});
@@ -12,9 +22,12 @@ class ActivityBarWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final registry = ref.watch(activityBarRegistryProvider);
-    final topItems = registry.topItems;
-    final bottomItems = registry.bottomItems;
+    final workbench = ref.watch(workbenchControllerProvider);
     final activeItem = ref.watch(activeActivityBarItemProvider);
+
+    final primaryItems = registry.primaryItems;
+    final secondaryItems = registry.secondaryItems;
+    final bottomItems = registry.bottomItems;
 
     return Container(
       width: 48,
@@ -25,24 +38,69 @@ class ActivityBarWidget extends ConsumerWidget {
       child: Column(
         children: [
           const SizedBox(height: 8),
-          for (final item in topItems)
+          for (final item in primaryItems)
             _ActivityBarIcon(
               item: item,
               isSelected: item.id == activeItem,
               onTap: () {
-                ref.read(activeActivityBarItemProvider.notifier).state = item.id;
+                ref
+                    .read(activeActivityBarItemProvider.notifier)
+                    .select(item.id);
+                if (item.defaultViewId != null) {
+                  workbench.activateActivity(
+                    item.id,
+                    defaultViewId: item.defaultViewId,
+                  );
+                }
+                if (item.action != null) {
+                  item.action!(context);
+                }
+              },
+            ),
+          if (primaryItems.isNotEmpty && secondaryItems.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Divider(color: AppTheme.border, height: 1),
+            ),
+          for (final item in secondaryItems)
+            _ActivityBarIcon(
+              item: item,
+              isSelected: item.id == activeItem,
+              onTap: () {
+                ref
+                    .read(activeActivityBarItemProvider.notifier)
+                    .select(item.id);
+                if (item.defaultViewId != null) {
+                  workbench.activateActivity(
+                    item.id,
+                    defaultViewId: item.defaultViewId,
+                  );
+                }
                 if (item.action != null) {
                   item.action!(context);
                 }
               },
             ),
           const Spacer(),
+          if (bottomItems.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Divider(color: AppTheme.border, height: 1),
+            ),
           for (final item in bottomItems)
             _ActivityBarIcon(
               item: item,
               isSelected: item.id == activeItem,
               onTap: () {
-                ref.read(activeActivityBarItemProvider.notifier).state = item.id;
+                ref
+                    .read(activeActivityBarItemProvider.notifier)
+                    .select(item.id);
+                if (item.defaultViewId != null) {
+                  workbench.activateActivity(
+                    item.id,
+                    defaultViewId: item.defaultViewId,
+                  );
+                }
                 if (item.action != null) {
                   item.action!(context);
                 }
@@ -69,7 +127,7 @@ class _ActivityBarIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: item.title,
+      message: item.label,
       preferBelow: false,
       child: Stack(
         alignment: Alignment.centerLeft,
@@ -85,14 +143,26 @@ class _ActivityBarIcon extends StatelessWidget {
             ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-            child: IconButton(
-              icon: Icon(
-                item.icon,
-                size: 20,
-                color: isSelected ? Colors.white : AppTheme.textMuted,
-              ),
-              splashRadius: 18,
-              onPressed: onTap,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    isSelected ? (item.activeIcon ?? item.icon) : item.icon,
+                    size: 20,
+                    color: isSelected ? Colors.white : AppTheme.textMuted,
+                  ),
+                  splashRadius: 18,
+                  onPressed: onTap,
+                ),
+                if (item.badgeBuilder != null)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: item.badgeBuilder!(context, isSelected ? item.id : null) ??
+                        const SizedBox.shrink(),
+                  ),
+              ],
             ),
           ),
         ],

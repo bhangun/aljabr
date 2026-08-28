@@ -7,8 +7,22 @@ environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
+  aljabr_plugin_api:
+    path: ../packages/aljabr_plugin_api
+  aljabr_plugin_runtime:
+    path: ../packages/aljabr_plugin_runtime
   aljabr_extension:
     path: ../packages/aljabr_extension
+  aljabr_governance:
+    path: ../../../Pro/UI/packages/aljabr_governance
+  aljabr_admin:
+    path: ../../../Pro/UI/packages/aljabr_admin
+  aljabr_analytics:
+    path: ../../../Pro/UI/packages/aljabr_analytics
+  aljabr_audit:
+    path: ../../../Pro/UI/packages/aljabr_audit
+  aljabr_collaboration:
+    path: ../../../Pro/UI/packages/aljabr_collaboration
   aljabr_sdk:
     path: ../packages/aljabr_sdk
   flutter:
@@ -35,7 +49,6 @@ dependencies:
   uuid: ^4.6.0
   highlight: ^0.7.0
   flutter_code_editor: ^0.3.5
-  
 
   riverpod: any
 dev_dependencies:

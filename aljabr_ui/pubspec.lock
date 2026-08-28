@@ -9,10 +9,59 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "96.0.0"
+  aljabr_admin:
+    dependency: "direct main"
+    description:
+      path: "../../../Pro/UI/packages/aljabr_admin"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_analytics:
+    dependency: "direct main"
+    description:
+      path: "../../../Pro/UI/packages/aljabr_analytics"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_audit:
+    dependency: "direct main"
+    description:
+      path: "../../../Pro/UI/packages/aljabr_audit"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_collaboration:
+    dependency: "direct main"
+    description:
+      path: "../../../Pro/UI/packages/aljabr_collaboration"
+      relative: true
+    source: path
+    version: "0.0.1"
   aljabr_extension:
     dependency: "direct main"
     description:
       path: "../packages/aljabr_extension"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_governance:
+    dependency: "direct main"
+    description:
+      path: "../../../Pro/UI/packages/aljabr_governance"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_plugin_api:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_plugin_api"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_plugin_runtime:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_plugin_runtime"
       relative: true
     source: path
     version: "0.0.1"

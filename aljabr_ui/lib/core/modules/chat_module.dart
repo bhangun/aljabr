@@ -20,7 +20,8 @@ class ChatModule implements AljabrModule {
         ownerId: id,
         title: 'Agent',
         icon: Icons.auto_awesome,
-        defaultRegion: UiRegion.mainWorkbench,
+        preferredPlacement: ViewPlacement.main,
+        behavior: ViewBehavior.editor,
         builder: (_) => const ChatPanel(),
       ),
     );
@@ -38,13 +39,16 @@ class ChatModule implements AljabrModule {
       ),
     );
 
-    // Activity Bar Center: Agent Chat icon
+    // Activity Bar Secondary: Agent Chat icon
     context.registerActivityBarItem(
       ActivityBarContribution(
         id: 'aljabr.activity.chat',
         ownerId: id,
-        title: 'Aljabr Agent',
+        label: 'Aljabr Agent',
         icon: Icons.auto_awesome_rounded,
+        activeIcon: Icons.auto_awesome,
+        section: ActivityBarSection.secondary,
+        defaultViewId: viewId,
         order: 15,
       ),
     );

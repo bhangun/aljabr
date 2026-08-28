@@ -1,27 +1,101 @@
-import '../commands/app_command.dart';
-import '../commands/command_registry.dart';
-import '../views/view_contribution.dart';
-import '../views/view_registry.dart';
-import '../navigation/navigation_contribution.dart';
-import '../navigation/navigation_registry.dart';
-import '../settings/settings_contribution.dart';
-import '../settings/settings_registry.dart';
-import '../context_menu/context_menu_contribution.dart';
-import '../context_menu/context_menu_registry.dart';
-import '../toolbar/toolbar_contribution.dart';
-import '../toolbar/toolbar_registry.dart';
-import '../status_bar/status_bar_contribution.dart';
-import '../status_bar/status_bar_registry.dart';
-import '../capabilities/capability.dart';
-import '../capabilities/capability_registry.dart';
-import '../events/event_bus.dart';
-import '../services/service_registry.dart';
-import '../tools/agent_tool.dart';
-import '../tools/tool_registry.dart';
-import '../activity_bar/activity_bar_contribution.dart';
-import '../activity_bar/activity_bar_registry.dart';
-import '../extensions/contribution_scope.dart';
-import '../extensions/extension_runtime.dart';
+import 'package:aljabr_plugin_api/aljabr_plugin_api.dart';
+import 'package:aljabr_plugin_runtime/aljabr_plugin_runtime.dart';
+
+class ModuleUiApi implements PluginUiApi {
+  final ModuleContext context;
+  ModuleUiApi(this.context);
+
+  @override
+  ViewRegistrar get views => _ViewRegistrar(context);
+
+  @override
+  ActivityBarRegistrar get activityBar => _ActivityBarRegistrar(context);
+
+  @override
+  ToolbarRegistrar get toolbar => _ToolbarRegistrar(context);
+
+  @override
+  StatusBarRegistrar get statusBar => _StatusBarRegistrar(context);
+
+  @override
+  MenuRegistrar get menus => _MenuRegistrar(context);
+
+  @override
+  NavigationRegistrar get navigation => _NavigationRegistrar(context);
+
+  @override
+  SettingsRegistrar get settings => _SettingsRegistrar(context);
+}
+
+class _ViewRegistrar implements ViewRegistrar {
+  final ModuleContext _ctx;
+  _ViewRegistrar(this._ctx);
+  @override
+  void register(ViewContribution view) => _ctx.registerView(view);
+}
+
+class _ActivityBarRegistrar implements ActivityBarRegistrar {
+  final ModuleContext _ctx;
+  _ActivityBarRegistrar(this._ctx);
+  @override
+  void register(ActivityBarContribution item) => _ctx.registerActivityBarItem(item);
+}
+
+class _ToolbarRegistrar implements ToolbarRegistrar {
+  final ModuleContext _ctx;
+  _ToolbarRegistrar(this._ctx);
+  @override
+  void register(ToolbarContribution item) => _ctx.registerToolbarItem(item);
+}
+
+class _StatusBarRegistrar implements StatusBarRegistrar {
+  final ModuleContext _ctx;
+  _StatusBarRegistrar(this._ctx);
+  @override
+  void register(StatusBarContribution item) => _ctx.registerStatusBarItem(item);
+}
+
+class _MenuRegistrar implements MenuRegistrar {
+  final ModuleContext _ctx;
+  _MenuRegistrar(this._ctx);
+  @override
+  void register(MenuContribution item) => _ctx.registerContextMenuItem(item);
+}
+
+class _NavigationRegistrar implements NavigationRegistrar {
+  final ModuleContext _ctx;
+  _NavigationRegistrar(this._ctx);
+  @override
+  void register(NavigationContribution item) => _ctx.registerNavigation(item);
+}
+
+class _SettingsRegistrar implements SettingsRegistrar {
+  final ModuleContext _ctx;
+  _SettingsRegistrar(this._ctx);
+  @override
+  void register(SettingsPageContribution page) => _ctx.registerSettingsPage(page);
+}
+
+class _CommandRegistrar implements CommandRegistrar {
+  final ModuleContext _ctx;
+  _CommandRegistrar(this._ctx);
+  @override
+  void register(AppCommand command) => _ctx.registerCommand(command);
+}
+
+class _ContextRegistrar implements ContextRegistrar {
+  final ModuleContext _ctx;
+  _ContextRegistrar(this._ctx);
+  @override
+  void register(ContextContribution contributor) => _ctx.registerContextContributor(contributor);
+}
+
+class _CapabilityService implements CapabilityService {
+  final ModuleContext _ctx;
+  _CapabilityService(this._ctx);
+  @override
+  bool supports(String capabilityId) => _ctx.capabilities.has(capabilityId);
+}
 
 class ModuleContext {
   final String moduleId;
@@ -29,6 +103,11 @@ class ModuleContext {
 
   late final ContributionScope contributions =
       ContributionScope(ownerId: moduleId);
+
+  late final PluginUiApi ui = ModuleUiApi(this);
+  late final CommandRegistrar commandsRegistrar = _CommandRegistrar(this);
+  late final ContextRegistrar contextRegistrar = _ContextRegistrar(this);
+  late final CapabilityService capabilityService = _CapabilityService(this);
 
   ModuleContext({
     required this.moduleId,
@@ -47,38 +126,40 @@ class ModuleContext {
   ServiceRegistry get services => runtime.services;
   ToolRegistry get tools => runtime.tools;
   ActivityBarRegistry get activityBar => runtime.activityBar;
+  ContextContributorRegistry get contextContributors => runtime.context;
+  WorkbenchController get workbench => runtime.workbench;
 
   void registerCommand(AppCommand command) {
-    commands.register(command, ownerId: moduleId);
+    runtime.commands.register(command, ownerId: moduleId);
   }
 
   void registerView(ViewContribution view) {
-    contributions.register(views, view);
+    contributions.register(runtime.views, view);
   }
 
   void registerNavigation(NavigationContribution item) {
-    contributions.register(navigation, item);
+    contributions.register(runtime.navigation, item);
   }
 
   void registerSettingsPage(SettingsPageContribution page) {
-    contributions.register(settings, page);
+    contributions.register(runtime.settings, page);
   }
 
   void registerContextMenuItem(MenuContribution item) {
-    contributions.register(contextMenus, item);
+    contributions.register(runtime.contextMenus, item);
   }
 
   void registerToolbarItem(ToolbarContribution item) {
-    contributions.register(toolbar, item);
+    contributions.register(runtime.toolbar, item);
   }
 
   void registerStatusBarItem(StatusBarContribution item) {
-    contributions.register(statusBar, item);
+    contributions.register(runtime.statusBar, item);
   }
 
   void registerCapability(String capabilityId, {String description = ''}) {
     contributions.register(
-      capabilities,
+      runtime.capabilities,
       CapabilityContribution(
         id: capabilityId,
         ownerId: moduleId,
@@ -88,14 +169,18 @@ class ModuleContext {
   }
 
   void registerService<T>(T service) {
-    services.register<T>(service, ownerId: moduleId);
+    runtime.services.register<T>(service, ownerId: moduleId);
   }
 
   void registerTool(AgentTool tool) {
-    contributions.register(tools, tool);
+    contributions.register(runtime.tools, tool);
   }
 
   void registerActivityBarItem(ActivityBarContribution item) {
-    contributions.register(activityBar, item);
+    contributions.register(runtime.activityBar, item);
+  }
+
+  void registerContextContributor(ContextContribution contributor) {
+    contributions.register(runtime.context, contributor);
   }
 }

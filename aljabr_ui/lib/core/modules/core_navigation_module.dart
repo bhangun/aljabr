@@ -17,6 +17,18 @@ class CoreNavigationModule implements AljabrModule {
     context.registerCapability('aljabr.core.navigation', description: 'Sidebar and multi-region navigation');
     context.registerCapability('aljabr.core.workspace', description: 'Local project and file system integration');
 
+    // Context Contributor
+    context.registerContextContributor(
+      ContextContribution(
+        id: 'aljabr.core.workspace_context',
+        ownerId: id,
+        contribute: (writer) {
+          writer.set(CoreContextKeys.workspaceName, 'wayang-platform');
+          writer.set(CoreContextKeys.gitBranch, 'main');
+        },
+      ),
+    );
+
     context.registerNavigation(
       NavigationContribution(
         id: 'aljabr.history',
@@ -46,8 +58,10 @@ class CoreNavigationModule implements AljabrModule {
       ActivityBarContribution(
         id: 'aljabr.activity.explorer',
         ownerId: id,
-        title: 'Explorer',
+        label: 'Explorer',
         icon: Icons.folder_copy_outlined,
+        activeIcon: Icons.folder_copy,
+        section: ActivityBarSection.primary,
         order: 10,
       ),
     );
@@ -56,8 +70,9 @@ class CoreNavigationModule implements AljabrModule {
       ActivityBarContribution(
         id: 'aljabr.activity.history',
         ownerId: id,
-        title: 'Timeline & History',
+        label: 'Timeline & History',
         icon: Icons.history_rounded,
+        section: ActivityBarSection.primary,
         order: 20,
       ),
     );
@@ -66,8 +81,10 @@ class CoreNavigationModule implements AljabrModule {
       ActivityBarContribution(
         id: 'aljabr.activity.extensions',
         ownerId: id,
-        title: 'Extensions & Plugins',
+        label: 'Extensions & Plugins',
         icon: Icons.extension_outlined,
+        activeIcon: Icons.extension,
+        section: ActivityBarSection.secondary,
         order: 30,
       ),
     );
@@ -76,9 +93,9 @@ class CoreNavigationModule implements AljabrModule {
       ActivityBarContribution(
         id: 'aljabr.activity.settings',
         ownerId: id,
-        title: 'Settings',
+        label: 'Settings',
         icon: Icons.settings_outlined,
-        placement: ActivityBarPlacement.bottom,
+        section: ActivityBarSection.bottom,
         order: 100,
         action: (ctx) {
           showDialog(
@@ -118,6 +135,24 @@ class CoreNavigationModule implements AljabrModule {
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.2,
                 color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7928CA).withValues(alpha: 0.2),
+                border: Border.all(color: const Color(0xFF7928CA).withValues(alpha: 0.4), width: 0.8),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'PRO',
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: Color(0xFFD8B4FE),
+                ),
               ),
             ),
           ],
