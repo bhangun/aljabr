@@ -3,10 +3,12 @@ import '../commands/app_command.dart';
 import '../context/context_contributor.dart';
 import '../context_menu/context_menu_contribution.dart';
 import '../navigation/navigation_contribution.dart';
+import '../navigation/navigation_group.dart';
 import '../settings/settings_contribution.dart';
 import '../status_bar/status_bar_contribution.dart';
 import '../toolbar/toolbar_contribution.dart';
 import '../views/view_contribution.dart';
+import '../workbench/workspace_mode.dart';
 
 /// Interface for registering commands.
 abstract interface class CommandRegistrar {
@@ -42,6 +44,7 @@ abstract interface class MenuRegistrar {
 /// Interface for registering navigation items.
 abstract interface class NavigationRegistrar {
   void register(NavigationContribution item);
+  void registerGroup(NavigationGroup group);
 }
 
 /// Interface for registering settings pages.
@@ -52,6 +55,11 @@ abstract interface class SettingsRegistrar {
 /// Interface for registering context contributors.
 abstract interface class ContextRegistrar {
   void register(ContextContribution contributor);
+}
+
+/// Interface for registering workspace modes.
+abstract interface class WorkspaceModeRegistrar {
+  void register(WorkspaceMode mode);
 }
 
 /// Interface for plugin UI API.
@@ -70,6 +78,8 @@ abstract interface class PluginUiApi {
   NavigationRegistrar get navigation;
   /// Settings registrar.
   SettingsRegistrar get settings;
+  /// Workspace mode registrar.
+  WorkspaceModeRegistrar get modes;
 }
 
 /// Interface for capability service.

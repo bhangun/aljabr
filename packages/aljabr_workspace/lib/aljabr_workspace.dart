@@ -1,5 +1,5 @@
-/// A Calculator.
-class Calculator {
-  /// Returns [value] plus 1.
-  int addOne(int value) => value + 1;
-}
+library aljabr_workspace;
+
+export 'src/models/workspace_models.dart';
+export 'src/models/work_item.dart';
+export 'src/models/timeline_event.dart';

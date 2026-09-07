@@ -1,3 +1,4 @@
+import '../capabilities/capabilities_models.dart';
 
 /// Metadata for a plugin.
 class PluginMetadata {
@@ -11,6 +12,8 @@ class PluginMetadata {
   final String? description;
   /// The author of the plugin.
   final String? author;
+  /// Declarative capabilities requested by the plugin.
+  final List<CapabilityId> capabilities;
 
   /// Creates a new [PluginMetadata] instance.
   const PluginMetadata({
@@ -19,5 +22,6 @@ class PluginMetadata {
     required this.version,
     this.description,
     this.author,
+    this.capabilities = const [],
   });
 }

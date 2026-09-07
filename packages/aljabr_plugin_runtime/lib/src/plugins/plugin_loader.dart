@@ -2,8 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'extension_manifest.dart';
 
+/// A discovered plugin.
+/// 
+/// It contains the manifest and the directory of the plugin.
 class DiscoveredPlugin {
+  /// The manifest of the plugin.
   final ExtensionManifest manifest;
+
+  /// The directory of the plugin.
   final Directory directory;
 
   const DiscoveredPlugin({
@@ -12,7 +18,12 @@ class DiscoveredPlugin {
   });
 }
 
+/// The plugin loader is responsible for loading plugins from the file system.
 class PluginLoader {
+
+  /// Returns the plugin directories.
+  /// 
+  /// It is called by the plugin loader to get the current context.
   static List<String> get pluginDirectories {
     final home = Platform.environment['HOME'] ??
         Platform.environment['USERPROFILE'] ??

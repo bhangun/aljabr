@@ -1,11 +1,30 @@
+
+/// A manifest file that contains information about an extension.
+///
+/// It is used by the extension loader to load an extension.
 class ExtensionManifest {
+  /// The unique identifier of the extension.
   final String id;
+
+  /// The name of the extension.
   final String name;
+
+  /// The version of the extension.
   final String version;
+
+  /// The description of the extension.
   final String description;
+
+  /// The author of the extension.
   final String? author;
+
+  /// The capabilities of the extension.
   final List<String> capabilities;
+
+  /// The dependencies of the extension.
   final List<String> dependencies;
+
+  /// The main entry point of the extension.
   final String? main;
 
   const ExtensionManifest({

@@ -1,4 +1,4 @@
-import 'context_key.dart';
+import 'reactive_context_contracts.dart';
 
 /// Abstract interface for a contribution context.
 abstract interface class ContributionContext {

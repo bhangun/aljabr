@@ -1,0 +1,38 @@
+name: aljabr_coding_pack
+description: Aggregated AI Coding Agent suite and Vibe Coding workspace mode for Aljabr.
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.4.1
+  aljabr_plugin_api:
+    path: ../aljabr_plugin_api
+  aljabr_plugin_runtime:
+    path: ../aljabr_plugin_runtime
+  aljabr_coding_core:
+    path: ../aljabr_coding_core
+  aljabr_plugin_chat:
+    path: ../aljabr_plugin_chat
+  aljabr_plugin_editor:
+    path: ../aljabr_plugin_editor
+  aljabr_plugin_diff:
+    path: ../aljabr_plugin_diff
+  aljabr_plugin_terminal:
+    path: ../aljabr_plugin_terminal
+  aljabr_plugin_mutations:
+    path: ../aljabr_plugin_mutations
+  aljabr_plugin_agent_run:
+    path: ../aljabr_plugin_agent_run
+  aljabr_plugin_project:
+    path: ../aljabr_plugin_project
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0

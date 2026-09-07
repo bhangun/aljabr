@@ -1,8 +1,5 @@
 import 'dart:convert';
-import '../features/chat/models/chat_entry.dart';
-import '../features/chat/models/tool_call.dart';
-import '../features/chat/models/tool_call_kind.dart';
-import '../utils/logger.dart';
+import 'package:aljabr_coding_core/aljabr_coding_core.dart';
 import 'agent_repository.dart';
 import 'api_client.dart';
 

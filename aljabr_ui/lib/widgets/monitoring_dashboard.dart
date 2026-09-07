@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../features/chat/models/approval_request.dart';
-import '../features/chat/models/chat_entry.dart';
-import '../features/chat/providers/chat_transcript_provider.dart';
-import '../features/project/providers/active_session_provider.dart';
-import '../features/project/services/session_monitor.dart';
+import 'package:aljabr_coding_core/aljabr_coding_core.dart';
+import 'package:aljabr_plugin_chat/aljabr_plugin_chat.dart';
 
 class MonitoringDashboard extends ConsumerStatefulWidget {
   const MonitoringDashboard({super.key});

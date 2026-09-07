@@ -1,8 +1,5 @@
 import 'dart:convert';
-import '../features/project/models/project.dart';
-import '../features/chat/models/attachment.dart';
-import '../features/project/models/session.dart';
-import '../features/project/models/session_statusx.dart';
+import 'package:aljabr_coding_core/aljabr_coding_core.dart';
 import 'backend_service.dart';
 import 'rest_backend_service.dart';
 import 'grpc_client.dart';

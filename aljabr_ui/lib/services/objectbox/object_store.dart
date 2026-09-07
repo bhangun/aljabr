@@ -1,10 +1,10 @@
 import 'package:path_provider/path_provider.dart';
 
-import '../../features/chat/models/attachment_dto.dart';
-import '../../features/chat/models/chat_entry_dto.dart';
-import '../../features/chat/models/session_dto.dart';
-import '../../features/dashboard/models/metrics_entry.dart';
-import '../../features/settings/models/app_settings_entity.dart';
+import '../../models/attachment_dto.dart';
+import '../../models/chat_entry_dto.dart';
+import '../../models/session_dto.dart';
+import '../../plugins/dashboard/models/metrics_entry.dart';
+import '../../plugins/settings/models/app_settings_entity.dart';
 import '../../utils/logger.dart';
 import '../../objectbox.g.dart';
 

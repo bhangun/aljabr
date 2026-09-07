@@ -2,15 +2,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:tenun/registry/bundle_core.dart';
-import 'screens/ide_home_screen.dart';
+import 'package:aljabr_plugin_api/aljabr_plugin_api.dart';
+import 'screens/main_home_screen.dart';
 import 'theme/app_colors.dart';
+import 'core/license/edition.dart';
+import 'core/license/license_service.dart';
 import 'providers/module_manager_provider.dart';
-import 'core/modules/core_navigation_module.dart';
-import 'core/modules/core_settings_module.dart';
-import 'core/modules/backend_monitor_module.dart';
-import 'core/modules/chat_module.dart';
-import 'core/modules/editor_module.dart';
 
 class _NoProxyOverrides extends HttpOverrides {
   @override
@@ -24,29 +23,86 @@ class _NoProxyOverrides extends HttpOverrides {
   }
 }
 
-void main() async {
+Future<void> _initHiveStorage(AljabrEdition edition) async {
+  Directory storageDir;
+  try {
+    final appSupport = await getApplicationSupportDirectory();
+    storageDir = Directory('${appSupport.path}/aljabr/${edition.name}');
+  } catch (_) {
+    final home = Platform.environment['HOME'] ?? '.';
+    storageDir = Directory('$home/.aljabr/storage/${edition.name}');
+  }
+
+  if (!storageDir.existsSync()) {
+    storageDir.createSync(recursive: true);
+  }
+
+  // Clean any orphaned lock files from prior ungraceful shutdowns
+  try {
+    for (final entity in storageDir.listSync()) {
+      if (entity is File && entity.path.endsWith('.lock')) {
+        try {
+          entity.deleteSync();
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  await Hive.initFlutter(storageDir.path);
+
+  try {
+    await Hive.openBox('aljabr_prefs');
+  } catch (_) {
+    File('${storageDir.path}/aljabr_prefs.lock').deleteSync();
+    await Hive.openBox('aljabr_prefs');
+  }
+
+  try {
+    await Hive.openBox('aljabr_sessions');
+  } catch (_) {
+    File('${storageDir.path}/aljabr_sessions.lock').deleteSync();
+    await Hive.openBox('aljabr_sessions');
+  }
+
+  try {
+    await Hive.openBox('aljabr_chat_history');
+  } catch (_) {
+    File('${storageDir.path}/aljabr_chat_history.lock').deleteSync();
+    await Hive.openBox('aljabr_chat_history');
+  }
+}
+
+Future<void> runAljabrApp({
+  AljabrEdition edition = AljabrEdition.community,
+  List<AljabrPlugin> additionalPlugins = const [],
+}) async {
   WidgetsFlutterBinding.ensureInitialized();
   coreChartsBundle.register();
-  await Hive.initFlutter();
-  await Hive.openBox('aljabr_prefs');
-  await Hive.openBox('aljabr_sessions');
-  await Hive.openBox('aljabr_chat_history');
+
+  await _initHiveStorage(edition);
   HttpOverrides.global = _NoProxyOverrides();
-  
-  final container = ProviderContainer();
-  final manager = container.read(moduleManagerProvider);
-  
-  // Register modules sequentially
-  await manager.activate(CoreNavigationModule());
-  await manager.activate(CoreSettingsModule());
-  await manager.activate(BackendMonitorModule());
-  await manager.activate(ChatModule());
-  await manager.activate(EditorModule());
+
+  final container = ProviderContainer(
+    overrides: [
+      injectedProPluginsProvider.overrideWithValue(additionalPlugins),
+    ],
+  );
+
+  final licenseNotifier = container.read(licenseProvider.notifier);
+  licenseNotifier.switchEdition(edition);
+
+  // Eagerly trigger plugin managers to load built-in and edition plugins
+  container.read(pluginManagerProvider);
+  container.read(proPluginHostProvider);
 
   runApp(UncontrolledProviderScope(
     container: container,
     child: const WayangIdeApp(),
   ));
+}
+
+void main() async {
+  await runAljabrApp(edition: AljabrEdition.community);
 }
 
 class WayangIdeApp extends StatelessWidget {
@@ -58,7 +114,7 @@ class WayangIdeApp extends StatelessWidget {
       title: 'Aljabr IDE',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const IdeHomeScreen(),
+      home: const MainHomeScreen(),
     );
   }
 }

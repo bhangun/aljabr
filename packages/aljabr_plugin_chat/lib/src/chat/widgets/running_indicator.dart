@@ -1,0 +1,19 @@
+import 'package:flutter/material.dart';
+
+import 'package:aljabr_coding_core/aljabr_coding_core.dart';
+
+class RunningIndicator extends StatelessWidget {
+  const RunningIndicator({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 12,
+      height: 12,
+      child: CircularProgressIndicator(
+        strokeWidth: 1.8,
+        color: AppTheme.accentBlue,
+      ),
+    );
+  }
+}

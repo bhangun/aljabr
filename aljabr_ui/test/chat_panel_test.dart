@@ -1,14 +1,15 @@
-import 'package:aljabr/features/project/providers/active_session_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:aljabr/features/chat/widgets/chat/chat_panel.dart';
-import 'package:aljabr/features/chat/providers/chat_transcript_provider.dart';
+import 'package:aljabr_coding_core/aljabr_coding_core.dart';
+import 'package:aljabr_plugin_chat/aljabr_plugin_chat.dart';
 
 void main() {
   testWidgets('ChatPanel renders messages', (WidgetTester tester) async {
     final container = ProviderContainer();
     container.read(activeSessionIdProvider.notifier).state = 'test-session';
+
+    addTearDown(container.dispose);
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -34,7 +35,7 @@ void main() {
 
     expect(find.text('who are you'), findsOneWidget);
 
-    // Dump the render tree to see sizing
-    debugDumpRenderTree();
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 35));
   });
 }

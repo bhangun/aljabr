@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:aljabr_plugin_api/aljabr_plugin_api.dart';
 import 'package:aljabr_plugin_runtime/aljabr_plugin_runtime.dart';
 import '../../../providers/module_manager_provider.dart';
 import '../workbench_area.dart';
@@ -13,17 +14,20 @@ class SidePaneSlot extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final layout = ref.watch(workbenchLayoutProvider);
     final controller = ref.watch(workbenchControllerProvider);
-    final dims = layout.dimensions;
+    final paneState = layout.pane(PaneId.sidebar);
 
-    if (!dims.isSidebarVisible) {
+    if (!paneState.visible) {
       return const SizedBox.shrink();
     }
 
+    final width = paneState.size ?? 280.0;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(
-          width: dims.sidebarWidth,
+          width: width,
           child: const WorkbenchArea(
             area: ViewArea.sidebar,
             fallback: SidebarWidget(),
@@ -32,7 +36,7 @@ class SidePaneSlot extends ConsumerWidget {
         WorkbenchSplitter(
           axis: SplitterAxis.horizontal,
           onDrag: (delta) {
-            controller.resizeSidebar(dims.sidebarWidth + delta);
+            controller.resizeSidebar(width + delta);
           },
           onDoubleClick: () {
             controller.toggleSidebar();

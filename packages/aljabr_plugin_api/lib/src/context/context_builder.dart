@@ -1,5 +1,4 @@
-import 'context_key.dart';
-import 'context_snapshot.dart';
+import 'reactive_context_contracts.dart';
 
 /// Interface for writing context.
 abstract interface class ContextWriter {
@@ -27,7 +26,13 @@ class ContextBuilder implements ContextWriter {
   }
 
   /// Builds a context snapshot.
-  ContextSnapshot build() {
-    return ContextSnapshot(_values);
+  ContextSnapshot build({int revision = 0, String targetId = ''}) {
+    return ContextSnapshot(
+      revision: revision,
+      targetId: targetId,
+      values: {
+        for (final entry in _values.entries) entry.key.id: entry.value,
+      },
+    );
   }
 }

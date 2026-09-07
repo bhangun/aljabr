@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:aljabr_plugin_api/aljabr_plugin_api.dart';
 import 'package:aljabr_plugin_runtime/aljabr_plugin_runtime.dart';
 import '../../../providers/module_manager_provider.dart';
 import '../workbench_area.dart';
@@ -12,11 +13,13 @@ class BottomPaneSlot extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final layout = ref.watch(workbenchLayoutProvider);
     final controller = ref.watch(workbenchControllerProvider);
-    final dims = layout.dimensions;
+    final paneState = layout.pane(PaneId.bottom);
 
-    if (!dims.isBottomVisible) {
+    if (!paneState.visible) {
       return const SizedBox.shrink();
     }
+
+    final height = paneState.size ?? 240.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -24,14 +27,14 @@ class BottomPaneSlot extends ConsumerWidget {
         WorkbenchSplitter(
           axis: SplitterAxis.vertical,
           onDrag: (delta) {
-            controller.resizeBottom(dims.bottomHeight - delta);
+            controller.resizeBottom(height - delta);
           },
           onDoubleClick: () {
             controller.toggleBottom();
           },
         ),
         SizedBox(
-          height: dims.bottomHeight,
+          height: height,
           width: double.infinity,
           child: const WorkbenchArea(
             area: ViewArea.bottomPanel,

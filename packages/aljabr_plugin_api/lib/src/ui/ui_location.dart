@@ -1,3 +1,5 @@
+import 'ui_surface.dart';
+
 class UiLocation {
   final String surface;
   final String slot;
@@ -19,40 +21,34 @@ class UiLocation {
   String toString() => 'UiLocation($surface.$slot)';
 }
 
-abstract final class UiSurfaces {
-  static const appToolbar = 'aljabr.ui.toolbar';
-  static const statusBar = 'aljabr.ui.statusBar';
-  static const activityBar = 'aljabr.ui.activityBar';
-}
-
 abstract final class UiLocations {
   static const toolbarStart = UiLocation(
-    surface: UiSurfaces.appToolbar,
+    surface: UiSurfaces.globalToolbar,
     slot: 'start',
   );
 
   static const toolbarCenter = UiLocation(
-    surface: UiSurfaces.appToolbar,
+    surface: UiSurfaces.globalToolbar,
     slot: 'center',
   );
 
   static const toolbarEnd = UiLocation(
-    surface: UiSurfaces.appToolbar,
+    surface: UiSurfaces.globalToolbar,
     slot: 'end',
   );
 
   static const statusBarStart = UiLocation(
-    surface: UiSurfaces.statusBar,
+    surface: UiSurfaces.statusBarLeft,
     slot: 'start',
   );
 
   static const statusBarCenter = UiLocation(
-    surface: UiSurfaces.statusBar,
+    surface: UiSurfaces.statusBarLeft,
     slot: 'center',
   );
 
   static const statusBarEnd = UiLocation(
-    surface: UiSurfaces.statusBar,
+    surface: UiSurfaces.statusBarRight,
     slot: 'end',
   );
 

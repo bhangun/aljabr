@@ -1,8 +1,8 @@
-import '../../features/chat/models/attachment_dto.dart';
-import '../../features/chat/models/chat_entry.dart';
-import '../../features/chat/models/chat_entry_dto.dart';
-import '../../features/chat/models/session_dto.dart';
-import '../../features/project/models/session.dart';
+import 'package:aljabr_coding_core/aljabr_coding_core.dart'
+    hide logDebug, logInfo, logWarning, logError;
+import '../../models/attachment_dto.dart';
+import '../../models/chat_entry_dto.dart';
+import '../../models/session_dto.dart';
 import '../../utils/logger.dart';
 import '../../objectbox.g.dart';
 import 'object_store.dart';

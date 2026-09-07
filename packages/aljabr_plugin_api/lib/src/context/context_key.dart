@@ -1,23 +1,5 @@
+import 'reactive_context_contracts.dart';
 
-
-/// A key for a context value.
-class ContextKey<T> {
-  /// The ID of the context key.
-  final String id;
-
-  /// Creates a new [ContextKey] instance.
-  const ContextKey(this.id);
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) || (other is ContextKey<T> && id == other.id);
-
-  @override
-  int get hashCode => Object.hash(T, id);
-
-  @override
-  String toString() => 'ContextKey<$T>($id)';
-}
 
 /// Core context keys.
 abstract final class CoreContextKeys {

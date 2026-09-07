@@ -2,10 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
-import '../features/project/models/project.dart';
-import '../features/chat/models/attachment.dart';
-import '../features/project/models/session.dart';
-import '../features/project/models/session_statusx.dart';
+import 'package:aljabr_coding_core/aljabr_coding_core.dart';
 import 'backend_service.dart';
 
 class RestBackendService implements BackendService {

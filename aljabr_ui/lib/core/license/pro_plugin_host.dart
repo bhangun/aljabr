@@ -1,55 +1,29 @@
+import 'package:aljabr_plugin_api/aljabr_plugin_api.dart';
 import 'package:aljabr_plugin_runtime/aljabr_plugin_runtime.dart';
-import 'package:aljabr_admin/aljabr_admin.dart';
-import 'package:aljabr_analytics/aljabr_analytics.dart';
-import 'package:aljabr_audit/aljabr_audit.dart';
-import 'package:aljabr_collaboration/aljabr_collaboration.dart';
-import 'package:aljabr_governance/aljabr_governance.dart';
 import 'edition.dart';
 
 class ProPluginHost {
   final PluginManager pluginManager;
+  final List<AljabrPlugin> proPlugins;
 
   ProPluginHost({
     required this.pluginManager,
+    this.proPlugins = const [],
   });
 
   Future<void> syncPlugins(AljabrEdition edition) async {
     if (edition.isProOrHigher) {
-      await _activateProPlugins();
+      for (final plugin in proPlugins) {
+        try {
+          await pluginManager.activate(plugin);
+        } catch (_) {}
+      }
     } else {
-      await _deactivateProPlugins();
-    }
-  }
-
-  Future<void> _activateProPlugins() async {
-    final plugins = [
-      GovernancePlugin(),
-      AdminPlugin(),
-      AnalyticsPlugin(),
-      AuditPlugin(),
-      CollaborationPlugin(),
-    ];
-
-    for (final plugin in plugins) {
-      try {
-        await pluginManager.activate(plugin);
-      } catch (_) {}
-    }
-  }
-
-  Future<void> _deactivateProPlugins() async {
-    final pluginIds = [
-      'aljabr.pro.governance',
-      'aljabr.pro.admin',
-      'aljabr.pro.analytics',
-      'aljabr.pro.audit',
-      'aljabr.pro.collaboration',
-    ];
-
-    for (final id in pluginIds) {
-      try {
-        await pluginManager.deactivate(id);
-      } catch (_) {}
+      for (final plugin in proPlugins) {
+        try {
+          await pluginManager.deactivate(plugin.metadata.id);
+        } catch (_) {}
+      }
     }
   }
 }

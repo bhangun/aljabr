@@ -11,22 +11,40 @@ dependencies:
     path: ../packages/aljabr_plugin_api
   aljabr_plugin_runtime:
     path: ../packages/aljabr_plugin_runtime
+  aljabr_coding_pack:
+    path: ../packages/aljabr_coding_pack
+  aljabr_coding_core:
+    path: ../packages/aljabr_coding_core
+  aljabr_plugin_chat:
+    path: ../packages/aljabr_plugin_chat
+  aljabr_plugin_editor:
+    path: ../packages/aljabr_plugin_editor
+  aljabr_plugin_diff:
+    path: ../packages/aljabr_plugin_diff
+  aljabr_plugin_mutations:
+    path: ../packages/aljabr_plugin_mutations
+  aljabr_plugin_agent_run:
+    path: ../packages/aljabr_plugin_agent_run
+  aljabr_plugin_terminal:
+    path: ../packages/aljabr_plugin_terminal
+  aljabr_plugin_project:
+    path: ../packages/aljabr_plugin_project
   aljabr_extension:
     path: ../packages/aljabr_extension
-  aljabr_governance:
-    path: ../../../Pro/UI/packages/aljabr_governance
-  aljabr_admin:
-    path: ../../../Pro/UI/packages/aljabr_admin
-  aljabr_analytics:
-    path: ../../../Pro/UI/packages/aljabr_analytics
-  aljabr_audit:
-    path: ../../../Pro/UI/packages/aljabr_audit
-  aljabr_collaboration:
-    path: ../../../Pro/UI/packages/aljabr_collaboration
+  aljabr_workspace:
+    path: ../packages/aljabr_workspace
+  aljabr_knowledge:
+    path: ../packages/aljabr_knowledge
+  aljabr_platform:
+    path: ../packages/aljabr_platform
   aljabr_sdk:
     path: ../packages/aljabr_sdk
   flutter:
     sdk: flutter
+
+  flutter_localizations:
+    sdk: flutter
+
   objectbox: ^5.3.2
   objectbox_flutter_libs: any
   flutter_markdown: ^0.7.3
@@ -54,10 +72,41 @@ dependencies:
 dev_dependencies:
   build_runner: any
   objectbox_generator: any
+  flutter_launcher_icons: "^0.14.1"
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_gen_runner:
   mocktail: ^1.0.4
 
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/aljabr-logo.png"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+  web:
+    generate: true
+    image_path: "assets/icons/aljabr-logo.png"
+    background_color: "#hexcode"
+    theme_color: "#hexcode"
+  windows:
+    generate: true
+    image_path: "assets/icons/aljabr-logo.png"
+    icon_size: 48 # min:48, max:256, default: 48
+  macos:
+    generate: true
+    image_path: "assets/icons/aljabr-logo.png"
+
+
 flutter:
+  generate: true
   uses-material-design: true
+
+  assets:
+  - assets/images/
+  - assets/icons/
+  - assets/audio/
+  - assets/fonts/
+  - assets/data/
+  - pubspec.yaml

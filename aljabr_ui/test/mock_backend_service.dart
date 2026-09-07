@@ -1,8 +1,6 @@
-import 'package:aljabr/features/project/models/session_statusx.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:aljabr_coding_core/aljabr_coding_core.dart';
 import 'package:aljabr/data/backend_service.dart';
-import 'package:aljabr/features/project/models/project.dart';
-import 'package:aljabr/features/project/models/session.dart';
 
 /// Mock implementation of [BackendService] for unit tests.
 /// No real network calls are made — all responses are configured with `when(...)`.

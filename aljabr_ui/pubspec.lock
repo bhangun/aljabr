@@ -9,31 +9,17 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "96.0.0"
-  aljabr_admin:
+  aljabr_coding_core:
     dependency: "direct main"
     description:
-      path: "../../../Pro/UI/packages/aljabr_admin"
+      path: "../packages/aljabr_coding_core"
       relative: true
     source: path
     version: "0.0.1"
-  aljabr_analytics:
+  aljabr_coding_pack:
     dependency: "direct main"
     description:
-      path: "../../../Pro/UI/packages/aljabr_analytics"
-      relative: true
-    source: path
-    version: "0.0.1"
-  aljabr_audit:
-    dependency: "direct main"
-    description:
-      path: "../../../Pro/UI/packages/aljabr_audit"
-      relative: true
-    source: path
-    version: "0.0.1"
-  aljabr_collaboration:
-    dependency: "direct main"
-    description:
-      path: "../../../Pro/UI/packages/aljabr_collaboration"
+      path: "../packages/aljabr_coding_pack"
       relative: true
     source: path
     version: "0.0.1"
@@ -44,10 +30,24 @@ packages:
       relative: true
     source: path
     version: "0.0.1"
-  aljabr_governance:
+  aljabr_knowledge:
     dependency: "direct main"
     description:
-      path: "../../../Pro/UI/packages/aljabr_governance"
+      path: "../packages/aljabr_knowledge"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_platform:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_platform"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_plugin_agent_run:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_plugin_agent_run"
       relative: true
     source: path
     version: "0.0.1"
@@ -58,6 +58,41 @@ packages:
       relative: true
     source: path
     version: "0.0.1"
+  aljabr_plugin_chat:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_plugin_chat"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_plugin_diff:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_plugin_diff"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_plugin_editor:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_plugin_editor"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_plugin_mutations:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_plugin_mutations"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_plugin_project:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_plugin_project"
+      relative: true
+    source: path
+    version: "0.0.1"
   aljabr_plugin_runtime:
     dependency: "direct main"
     description:
@@ -65,10 +100,24 @@ packages:
       relative: true
     source: path
     version: "0.0.1"
+  aljabr_plugin_terminal:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_plugin_terminal"
+      relative: true
+    source: path
+    version: "0.0.1"
   aljabr_sdk:
     dependency: "direct main"
     description:
       path: "../packages/aljabr_sdk"
+      relative: true
+    source: path
+    version: "0.0.1"
+  aljabr_workspace:
+    dependency: "direct main"
+    description:
+      path: "../packages/aljabr_workspace"
       relative: true
     source: path
     version: "0.0.1"
@@ -208,6 +257,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.0"
+  cli_util:
+    dependency: transitive
+    description:
+      name: cli_util
+      sha256: ff6785f7e9e3c38ac98b2fb035701789de90154024a75b6cb926445e83197d1c
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.2"
   clock:
     dependency: transitive
     description:
@@ -232,6 +289,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.1"
+  color:
+    dependency: transitive
+    description:
+      name: color
+      sha256: ddcdf1b3badd7008233f5acffaf20ca9f5dc2cd0172b75f68f24526a5f5725cb
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.0"
   convert:
     dependency: transitive
     description:
@@ -272,6 +337,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.7"
+  dartx:
+    dependency: transitive
+    description:
+      name: dartx
+      sha256: "8b25435617027257d43e6508b5fe061012880ddfdaa75a71d607c3de2a13d244"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
   desktop_drop:
     dependency: "direct main"
     description:
@@ -349,6 +422,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.5"
+  flutter_gen_core:
+    dependency: transitive
+    description:
+      name: flutter_gen_core
+      sha256: "8ccb1f809642b34eb4857d8d7c4e5b41430a8cba8206177aae2ffe9d72b5eef3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.15.0"
+  flutter_gen_runner:
+    dependency: "direct dev"
+    description:
+      name: flutter_gen_runner
+      sha256: "2b0fff517a75a14ed2eff749c1da2d6b8b568e542ad2b1c967356669a4c29bb2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.15.0"
   flutter_highlight:
     dependency: transitive
     description:
@@ -357,6 +446,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.0"
+  flutter_launcher_icons:
+    dependency: "direct dev"
+    description:
+      name: flutter_launcher_icons
+      sha256: "10f13781741a2e3972126fae08393d3c4e01fa4cd7473326b94b72cf594195e7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.14.4"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -365,6 +462,11 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  flutter_localizations:
+    dependency: "direct main"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
   flutter_markdown:
     dependency: "direct main"
     description:
@@ -487,6 +589,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.1.0"
+  hashcodes:
+    dependency: transitive
+    description:
+      name: hashcodes
+      sha256: "80f9410a5b3c8e110c4b7604546034749259f5d6dcca63e0d3c17c9258f1a651"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.0"
   highlight:
     dependency: "direct main"
     description:
@@ -559,6 +669,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.9.1"
+  image_size_getter:
+    dependency: transitive
+    description:
+      name: image_size_getter
+      sha256: "7c26937e0ae341ca558b7556591fd0cc456fcc454583b7cb665d2f03e93e590f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.1"
   intl:
     dependency: transitive
     description:
@@ -1092,6 +1210,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.6.18"
+  time:
+    dependency: transitive
+    description:
+      name: time
+      sha256: "46187cf30bffdab28c56be9a63861b36e4ab7347bf403297595d6a97e10c789f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.6"
   tuple:
     dependency: transitive
     description:

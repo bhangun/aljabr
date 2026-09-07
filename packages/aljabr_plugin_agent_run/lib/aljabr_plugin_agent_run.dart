@@ -1,0 +1,19 @@
+library aljabr_plugin_agent_run;
+
+export 'src/agent_run_plugin.dart';
+export 'src/models/agent_run.dart';
+export 'src/models/agent_step.dart';
+export 'src/models/agent_run_status.dart';
+export 'src/models/agent_event.dart';
+export 'src/providers/agent_run_provider.dart';
+export 'src/services/agent_run_service.dart';
+export 'src/widgets/agent_run_panel.dart';
+export 'src/widgets/agent_run_header.dart';
+export 'src/widgets/agent_run_actions.dart';
+export 'src/widgets/agent_timeline.dart';
+export 'src/widgets/agent_step_tile.dart';
+export 'src/widgets/agent_step_details.dart';
+export 'src/widgets/agent_run_trigger.dart';
+export 'src/widgets/agent_completion.dart';
+export 'src/widgets/agent_permission_summary.dart';
+export 'src/widgets/agent_command_output.dart';

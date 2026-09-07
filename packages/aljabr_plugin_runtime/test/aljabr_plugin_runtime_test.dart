@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:aljabr_plugin_api/aljabr_plugin_api.dart';
 import 'package:aljabr_plugin_runtime/aljabr_plugin_runtime.dart';
 
 class _TestPlugin implements AljabrPlugin {
@@ -18,7 +19,7 @@ class _TestPlugin implements AljabrPlugin {
         ownerId: metadata.id,
         title: 'Test View',
         preferredPlacement: ViewPlacement.sidebar,
-        builder: (_) => const SizedBox(),
+        builder: (_) => const Text('Active View Content'),
       ),
     );
 
@@ -39,6 +40,31 @@ class _TestPlugin implements AljabrPlugin {
         contribute: (writer) {
           writer.set(CoreContextKeys.workspaceName, 'Plugin Runtime Workspace');
         },
+      ),
+    );
+  }
+
+  @override
+  Future<void> deactivate(PluginContext context) async {}
+}
+
+class _TestProPlugin implements AljabrPlugin {
+  @override
+  PluginMetadata get metadata => const PluginMetadata(
+        id: 'aljabr.pro.analytics',
+        name: 'Pro Analytics Plugin',
+        version: '1.0.0',
+      );
+
+  @override
+  Future<void> activate(PluginContext context) async {
+    context.ui.views.register(
+      ViewContribution(
+        id: 'test.pro.analytics',
+        ownerId: metadata.id,
+        title: 'Pro Analytics',
+        preferredPlacement: ViewPlacement.main,
+        builder: (_) => const Text('Pro Content'),
       ),
     );
   }
@@ -76,6 +102,77 @@ void main() {
       expect(manager.runtime.views.get('test.view'), isNull);
       expect(manager.runtime.activityBar.get('test.activity'), isNull);
       expect(manager.runtime.workbench.layout.locationOf('test.view'), isNull);
+    });
+
+    testWidgets('WorkbenchViewResolver resolves active, missing, and pro entitlement views correctly', (tester) async {
+      final plugin = _TestPlugin();
+      final proPlugin = _TestProPlugin();
+      await manager.activate(plugin);
+      await manager.activate(proPlugin);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              final resolverCommunity = WorkbenchViewResolver(
+                viewRegistry: manager.runtime.views,
+                isProOrHigher: false,
+              );
+
+              final resolvedActive = resolverCommunity.resolve('test.view', context);
+              expect(resolvedActive, isA<ActivePluginView>());
+
+              final resolvedMissing = resolverCommunity.resolve('non.existent.view', context);
+              expect(resolvedMissing, isA<MissingPluginPlaceholderView>());
+
+              final resolvedEntitlement = resolverCommunity.resolve('test.pro.analytics', context);
+              expect(resolvedEntitlement, isA<EnterpriseEntitlementPlaceholderView>());
+
+              final resolverPro = WorkbenchViewResolver(
+                viewRegistry: manager.runtime.views,
+                isProOrHigher: true,
+              );
+              final resolvedProActive = resolverPro.resolve('test.pro.analytics', context);
+              expect(resolvedProActive, isA<ActivePluginView>());
+
+              return Container();
+            },
+          ),
+        ),
+      );
+    });
+
+    testWidgets('ViewErrorBoundary catches render errors and renders retry card', (tester) async {
+      bool shouldThrow = true;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ViewErrorBoundary(
+              viewId: 'crashing.view',
+              viewTitle: 'Crashing Plugin View',
+              builder: () {
+                if (shouldThrow) {
+                  throw Exception('Simulated Plugin View Crash!');
+                }
+                return const Text('Recovered Plugin View!');
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      expect(find.text('View Error: Crashing Plugin View'), findsOneWidget);
+      expect(find.textContaining('Simulated Plugin View Crash!'), findsOneWidget);
+
+      // Tap Reload View after fixing error
+      shouldThrow = false;
+      await tester.tap(find.text('Reload View'));
+      await tester.pump();
+
+      expect(find.text('Recovered Plugin View!'), findsOneWidget);
+      expect(find.text('View Error: Crashing Plugin View'), findsNothing);
     });
   });
 }

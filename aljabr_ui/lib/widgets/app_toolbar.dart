@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:aljabr_extension/aljabr_extension.dart';
 import '../providers/module_manager_provider.dart';
 import '../theme/app_colors.dart';
+import 'workbench/modes/workspace_mode_segmented_switch.dart';
+
 
 class AppToolbar extends ConsumerWidget {
   final String targetId;
@@ -33,12 +35,20 @@ class AppToolbar extends ConsumerWidget {
             toolbarContext: ctx,
           ),
           const Spacer(),
-          _ToolbarSlot(
-            targetId: targetId,
-            alignment: ToolbarAlignment.center,
-            toolbarContext: ctx,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const WorkspaceModeSegmentedSwitch(),
+              const SizedBox(width: 8),
+              _ToolbarSlot(
+                targetId: targetId,
+                alignment: ToolbarAlignment.center,
+                toolbarContext: ctx,
+              ),
+            ],
           ),
           const Spacer(),
+
           _ToolbarSlot(
             targetId: targetId,
             alignment: ToolbarAlignment.end,

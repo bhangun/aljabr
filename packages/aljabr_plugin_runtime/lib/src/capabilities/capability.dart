@@ -1,5 +1,6 @@
 import 'package:aljabr_plugin_api/aljabr_plugin_api.dart';
 
+/// 
 class CapabilityContribution implements OwnedContribution {
   @override
   final String id;

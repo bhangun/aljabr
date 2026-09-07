@@ -1,9 +1,6 @@
 import 'dart:convert';
-import '../features/chat/models/chat_entry.dart';
-import '../features/chat/models/tool_call.dart';
-import '../features/chat/models/tool_call_kind.dart';
+import 'package:aljabr_coding_core/aljabr_coding_core.dart';
 import '../src/generated/wayang.pb.dart' as grpc;
-import '../utils/logger.dart';
 import 'agent_repository.dart';
 import 'grpc_client.dart';
 

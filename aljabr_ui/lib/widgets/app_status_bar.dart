@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:aljabr_extension/aljabr_extension.dart';
 import '../providers/module_manager_provider.dart';
 import '../theme/app_colors.dart';
+import 'workbench/modes/workspace_mode_status_item.dart';
+
 
 class AppStatusBar extends ConsumerWidget {
   final StatusBarContext? contextData;
@@ -35,13 +37,21 @@ class AppStatusBar extends ConsumerWidget {
             statusContext: statusContext,
           ),
           const Spacer(),
-          _StatusBarSlot(
-            alignment: StatusBarAlignment.end,
-            statusContext: statusContext,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _StatusBarSlot(
+                alignment: StatusBarAlignment.end,
+                statusContext: statusContext,
+              ),
+              const SizedBox(width: 8),
+              const WorkspaceModeStatusItem(),
+            ],
           ),
         ],
       ),
     );
+
   }
 }
 

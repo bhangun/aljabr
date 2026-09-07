@@ -6,7 +6,7 @@ class ContributionRegistry<T extends OwnedContribution> implements OwnerCleanup 
 
   void register(T item) {
     if (_items.containsKey(item.id)) {
-      throw StateError('Contribution already registered: ${item.id}');
+      unregister(item.id);
     }
 
     _items[item.id] = item;

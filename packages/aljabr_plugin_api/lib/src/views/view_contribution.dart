@@ -3,6 +3,7 @@ import '../extensions/contribution_ordering.dart';
 import 'ui_region.dart';
 import 'view_area.dart';
 import 'view_behavior.dart';
+import 'view_descriptor.dart';
 import 'view_placement.dart';
 
 typedef ViewBuilder = Widget Function(BuildContext context);
@@ -23,6 +24,14 @@ class ViewContribution implements OrderedContribution {
   final int order;
 
   final ViewBuilder builder;
+
+  ViewDescriptor get descriptor => ViewDescriptor(
+        id: id,
+        title: title,
+        pluginId: ownerId,
+        placement: preferredPlacement,
+        behavior: behavior,
+      );
 
   UiRegion get defaultRegion {
     switch (preferredPlacement.preferredArea) {
@@ -55,4 +64,21 @@ class ViewContribution implements OrderedContribution {
                     : defaultRegion == UiRegion.secondarySidebar
                         ? ViewPlacement.secondaryPanel
                         : ViewPlacement.main);
+
+  factory ViewContribution.fromDescriptor({
+    required ViewDescriptor descriptor,
+    required ViewBuilder builder,
+    IconData? icon,
+    int order = 0,
+  }) =>
+      ViewContribution(
+        id: descriptor.id,
+        ownerId: descriptor.pluginId ?? 'aljabr.core',
+        title: descriptor.title,
+        icon: icon,
+        preferredPlacement: descriptor.placement,
+        behavior: descriptor.behavior,
+        builder: builder,
+        order: order,
+      );
 }

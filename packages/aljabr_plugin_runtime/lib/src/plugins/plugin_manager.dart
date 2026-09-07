@@ -3,14 +3,17 @@ import 'package:aljabr_plugin_api/aljabr_plugin_api.dart';
 import '../extensions/extension_runtime.dart';
 import 'runtime_plugin_context.dart';
 
+/// 
 class PluginManager {
   final Map<String, AljabrPlugin> _activePlugins = {};
   final Map<String, RuntimePluginContext> _contexts = {};
   final ExtensionRuntime runtime;
 
+  /// 
   PluginManager({ExtensionRuntime? runtime})
       : runtime = runtime ?? ExtensionRuntime();
 
+  /// 
   Future<void> activate(AljabrPlugin plugin) async {
     if (_activePlugins.containsKey(plugin.metadata.id)) {
       return;

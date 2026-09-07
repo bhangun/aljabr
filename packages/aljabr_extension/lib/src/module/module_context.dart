@@ -25,6 +25,9 @@ class ModuleUiApi implements PluginUiApi {
 
   @override
   SettingsRegistrar get settings => _SettingsRegistrar(context);
+
+  @override
+  WorkspaceModeRegistrar get modes => _WorkspaceModeRegistrar(context);
 }
 
 class _ViewRegistrar implements ViewRegistrar {
@@ -67,6 +70,8 @@ class _NavigationRegistrar implements NavigationRegistrar {
   _NavigationRegistrar(this._ctx);
   @override
   void register(NavigationContribution item) => _ctx.registerNavigation(item);
+  @override
+  void registerGroup(NavigationGroup group) => _ctx.runtime.navigation.registerGroup(group);
 }
 
 class _SettingsRegistrar implements SettingsRegistrar {
@@ -74,6 +79,13 @@ class _SettingsRegistrar implements SettingsRegistrar {
   _SettingsRegistrar(this._ctx);
   @override
   void register(SettingsPageContribution page) => _ctx.registerSettingsPage(page);
+}
+
+class _WorkspaceModeRegistrar implements WorkspaceModeRegistrar {
+  final ModuleContext _ctx;
+  _WorkspaceModeRegistrar(this._ctx);
+  @override
+  void register(WorkspaceMode mode) => _ctx.runtime.workspaceModes.register(mode);
 }
 
 class _CommandRegistrar implements CommandRegistrar {

@@ -1,0 +1,20 @@
+library aljabr_plugin_editor;
+
+export 'src/editor_plugin.dart';
+export 'src/models/problem_item.dart';
+export 'src/providers/editor_panel_provider.dart';
+export 'src/providers/expandable_folder_provider.dart';
+export 'src/providers/explorer_visible_providers.dart';
+export 'src/providers/file_buffer_provider.dart';
+export 'src/providers/file_services.dart';
+export 'src/providers/file_tree_provider.dart';
+export 'src/providers/file_watcher_provider.dart';
+export 'src/providers/open_file_provider.dart';
+export 'src/providers/problem_provider.dart';
+export 'src/widgets/code_editor_panel.dart';
+export 'src/widgets/code_editor_view.dart';
+export 'src/widgets/code_line.dart';
+export 'src/widgets/editor_panel_shell.dart';
+export 'src/widgets/file_explorer_panel.dart';
+export 'src/widgets/file_tabs_bar.dart';
+export 'src/widgets/problems_panel.dart';
