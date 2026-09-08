@@ -11,12 +11,13 @@ import '../../plugins/settings/screens/settings_dialog.dart';
 /// Left rail: project switcher, new-session button, history/scheduled
 /// shortcuts, pinned sessions, then a collapsible session tree per project.
 class SidebarWidget extends ConsumerWidget {
-  const SidebarWidget({super.key});
+  final double? width;
+  const SidebarWidget({super.key, this.width});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
-      width: 272,
+      width: width,
       color: AppTheme.panel,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

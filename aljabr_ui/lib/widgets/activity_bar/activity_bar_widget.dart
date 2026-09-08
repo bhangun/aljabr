@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:aljabr_extension/aljabr_extension.dart';
+import 'package:aljabr_plugin_api/aljabr_plugin_api.dart';
+import 'package:aljabr_plugin_runtime/aljabr_plugin_runtime.dart';
+import '../workbench/views/vscode_sidebar_view.dart';
 import '../../providers/module_manager_provider.dart';
 import '../../theme/app_colors.dart';
 
 class ActiveActivityBarItemNotifier extends Notifier<String?> {
   @override
-  String? build() => 'aljabr.activity.explorer';
+  String? build() => 'aljabr.activity.projects';
 
   void select(String? id) => state = id;
 }
@@ -18,6 +20,69 @@ final activeActivityBarItemProvider =
 
 class ActivityBarWidget extends ConsumerWidget {
   const ActivityBarWidget({super.key});
+
+  void _handleItemTap(
+    BuildContext context,
+    WidgetRef ref,
+    ActivityBarContribution item,
+    WorkbenchController workbench,
+  ) {
+    final activeItem = ref.read(activeActivityBarItemProvider);
+    final isCurrent = item.id == activeItem;
+
+    if (isCurrent && workbench.layout.pane(PaneId.sidebar).visible) {
+      workbench.hidePane(PaneId.sidebar);
+    } else {
+      workbench.showPane(PaneId.sidebar);
+      ref.read(activeActivityBarItemProvider.notifier).select(item.id);
+
+      switch (item.id) {
+        case 'aljabr.activity.projects':
+          ref
+              .read(vsCodeSidebarTabProvider.notifier)
+              .select(VsCodeSidebarTab.projects);
+          break;
+        case 'aljabr.activity.explorer':
+          ref
+              .read(vsCodeSidebarTabProvider.notifier)
+              .select(VsCodeSidebarTab.explorer);
+          break;
+        case 'aljabr.activity.search':
+          ref
+              .read(vsCodeSidebarTabProvider.notifier)
+              .select(VsCodeSidebarTab.search);
+          break;
+        case 'aljabr.activity.source_control':
+        case 'aljabr.activity.git':
+          ref
+              .read(vsCodeSidebarTabProvider.notifier)
+              .select(VsCodeSidebarTab.sourceControl);
+          break;
+        case 'aljabr.activity.extensions':
+        case 'aljabr.activity.plugins':
+          ref
+              .read(vsCodeSidebarTabProvider.notifier)
+              .select(VsCodeSidebarTab.extensions);
+          break;
+        case 'aljabr.activity.chat':
+        case 'aljabr.activity.assistant':
+          ref
+              .read(vsCodeSidebarTabProvider.notifier)
+              .select(VsCodeSidebarTab.assistant);
+          break;
+      }
+    }
+
+    if (item.defaultViewId != null) {
+      workbench.activateActivity(
+        item.id,
+        defaultViewId: item.defaultViewId,
+      );
+    }
+    if (item.action != null) {
+      item.action!(context);
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -42,20 +107,7 @@ class ActivityBarWidget extends ConsumerWidget {
             _ActivityBarIcon(
               item: item,
               isSelected: item.id == activeItem,
-              onTap: () {
-                ref
-                    .read(activeActivityBarItemProvider.notifier)
-                    .select(item.id);
-                if (item.defaultViewId != null) {
-                  workbench.activateActivity(
-                    item.id,
-                    defaultViewId: item.defaultViewId,
-                  );
-                }
-                if (item.action != null) {
-                  item.action!(context);
-                }
-              },
+              onTap: () => _handleItemTap(context, ref, item, workbench),
             ),
           if (primaryItems.isNotEmpty && secondaryItems.isNotEmpty)
             const Padding(
@@ -66,20 +118,7 @@ class ActivityBarWidget extends ConsumerWidget {
             _ActivityBarIcon(
               item: item,
               isSelected: item.id == activeItem,
-              onTap: () {
-                ref
-                    .read(activeActivityBarItemProvider.notifier)
-                    .select(item.id);
-                if (item.defaultViewId != null) {
-                  workbench.activateActivity(
-                    item.id,
-                    defaultViewId: item.defaultViewId,
-                  );
-                }
-                if (item.action != null) {
-                  item.action!(context);
-                }
-              },
+              onTap: () => _handleItemTap(context, ref, item, workbench),
             ),
           const Spacer(),
           if (bottomItems.isNotEmpty)
@@ -91,20 +130,7 @@ class ActivityBarWidget extends ConsumerWidget {
             _ActivityBarIcon(
               item: item,
               isSelected: item.id == activeItem,
-              onTap: () {
-                ref
-                    .read(activeActivityBarItemProvider.notifier)
-                    .select(item.id);
-                if (item.defaultViewId != null) {
-                  workbench.activateActivity(
-                    item.id,
-                    defaultViewId: item.defaultViewId,
-                  );
-                }
-                if (item.action != null) {
-                  item.action!(context);
-                }
-              },
+              onTap: () => _handleItemTap(context, ref, item, workbench),
             ),
           const SizedBox(height: 8),
         ],

@@ -8,6 +8,7 @@ import '../../plugins/marketplace/marketplace_plugin.dart';
 import '../../plugins/navigation/navigation_plugin.dart';
 import '../../plugins/settings/settings_plugin.dart';
 import '../../plugins/explorer/explorer_plugin.dart';
+import '../../widgets/sidebar/sidebar_widget.dart';
 import '../commands/workbench_commands.dart';
 
 /// Central bootstrapper for the Workbench Platform.
@@ -35,7 +36,9 @@ class BuiltInPluginLoader {
 
   /// Default domain plugin packs (Coding Agent Suite).
   static List<AljabrPlugin> get defaultDomainPacks => [
-        CodingAgentPluginPack(),
+        CodingAgentPluginPack(
+          vibeSidebarBuilder: (context) => const SidebarWidget(),
+        ),
       ];
 
   Future<void> loadAll() async {

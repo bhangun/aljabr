@@ -81,7 +81,7 @@ class BackendState {
       description: 'High-Performance Local Neural LLM Engine',
     ),
     this.frontend = const SingleServerState(
-      name: 'Aljabr Studio GUI',
+      name: 'Aljabr Vibe Coder',
       description: 'Desktop Studio & Extensible IDE Shell',
       status: BackendStatus.running,
     ),
@@ -212,9 +212,7 @@ class DynamicPathResolver {
   static String? _cachedWorkspaceRoot;
 
   static String get homeDir =>
-      DotEnvLoader.get('HOME') ??
-      Platform.environment['USERPROFILE'] ??
-      '';
+      DotEnvLoader.get('HOME') ?? Platform.environment['USERPROFILE'] ?? '';
 
   static String expandPath(String path) {
     if (path.startsWith('~/')) {
@@ -270,7 +268,8 @@ class DynamicPathResolver {
           return current.path;
         }
 
-        if (Directory('${current.path}/Community/Backend/aljabr-api').existsSync() ||
+        if (Directory('${current.path}/Community/Backend/aljabr-api')
+                .existsSync() ||
             Directory('${current.path}/Backend/aljabr-api').existsSync()) {
           Directory cand = current;
           for (int i = 0; i < 4; i++) {
@@ -392,7 +391,7 @@ class BackendProcessNotifier extends Notifier<BackendState> {
 
     final initialState = BackendState(
       frontend: const SingleServerState(
-        name: 'Aljabr Studio GUI',
+        name: 'Aljabr Vibe Coder',
         description: 'Desktop Studio & Extensible IDE Shell',
         status: BackendStatus.running,
       ).copyWith(logs: initialFrontendLogs),
@@ -499,7 +498,12 @@ class BackendProcessNotifier extends Notifier<BackendState> {
         arguments = [];
       } else if (jarFile.existsSync()) {
         executable = 'java';
-        arguments = ['-Dquarkus.http.port=8085', '-Dquarkus.grpc.server.port=9000', '-jar', jarFile.path];
+        arguments = [
+          '-Dquarkus.http.port=8085',
+          '-Dquarkus.grpc.server.port=9000',
+          '-jar',
+          jarFile.path
+        ];
       } else {
         final mvnPath = await _resolveExecutable('mvn');
         executable = mvnPath ?? 'mvn';
@@ -515,7 +519,8 @@ class BackendProcessNotifier extends Notifier<BackendState> {
       _aljabrProcess = await Process.start(
         executable,
         arguments,
-        workingDirectory: Directory(workingDir).existsSync() ? workingDir : null,
+        workingDirectory:
+            Directory(workingDir).existsSync() ? workingDir : null,
         environment: env,
       );
 
@@ -652,7 +657,8 @@ class BackendProcessNotifier extends Notifier<BackendState> {
         workDir = scriptFile.parent.path;
       } else {
         final jarFile = File('$gollekDir/ui/gollek-cli/build/gollek.jar');
-        final binaryFile = File('${DynamicPathResolver.homeDir}/.gollek/bin/gollek');
+        final binaryFile =
+            File('${DynamicPathResolver.homeDir}/.gollek/bin/gollek');
 
         if (binaryFile.existsSync()) {
           executable = binaryFile.path;
@@ -792,31 +798,19 @@ class BackendProcessNotifier extends Notifier<BackendState> {
   // ── Master Controls (Ordered Boot Sequence) ──────────────────────────────
 
   Future<void> startAll() async {
-    _appendLog('⚙️ Initiating ordered dual-backend startup sequence...', null);
-
-    if (state.gollek.status != BackendStatus.running) {
-      _appendLog('▶️ [Step 1/2] Starting Gollek Inference Substrate (:8080)...',
-          ServerType.gollek);
-      await startGollek();
-
-      for (int i = 0; i < 20; i++) {
-        if (state.gollek.status == BackendStatus.running ||
-            await _isPortListening(8080) ||
-            await _isPortListening(8082) ||
-            await _isPortListening(9131)) {
-          _appendLog('✅ Gollek Inference Engine is active and ready.',
-              ServerType.gollek);
-          break;
-        }
-        await Future.delayed(const Duration(milliseconds: 250));
-      }
-    }
+    _appendLog('⚙️ Initiating dual-backend startup sequence...', null);
 
     if (state.aljabr.status != BackendStatus.running) {
       _appendLog(
-          '▶️ [Step 2/2] Starting Aljabr Agent Platform (:8085 / :9000)...',
+          '▶️ Starting Aljabr Agent Platform (:8085 / :9000)...',
           ServerType.aljabr);
       await startAljabr();
+    }
+
+    if (state.gollek.status != BackendStatus.running) {
+      _appendLog('▶️ Starting Gollek Inference Substrate (:8080)...',
+          ServerType.gollek);
+      unawaited(startGollek());
     }
   }
 
@@ -878,15 +872,24 @@ class BackendProcessNotifier extends Notifier<BackendState> {
 
   Map<String, String> _buildEnvironment() {
     final home = DynamicPathResolver.homeDir;
-    final path = DotEnvLoader.get('PATH') ??
-        '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$home/.local/bin';
+    final systemPath =
+        Platform.environment['PATH'] ?? '/usr/bin:/bin:/usr/sbin:/sbin';
+    final path =
+        '/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$home/.local/bin:$home/.cargo/bin:$systemPath';
+    final javaHome = DotEnvLoader.get('JAVA_HOME') ??
+        Platform.environment['JAVA_HOME'] ??
+        (Directory('/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home').existsSync()
+            ? '/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home'
+            : (Directory('/Library/Java/JavaVirtualMachines/jdk-28.jdk/Contents/Home').existsSync()
+                ? '/Library/Java/JavaVirtualMachines/jdk-28.jdk/Contents/Home'
+                : null));
     final env = <String, String>{
       ...DotEnvLoader.getAll(),
       'HOME': home,
-      'USER': DotEnvLoader.get('USER') ?? Platform.environment['USER'] ?? 'user',
+      'USER':
+          DotEnvLoader.get('USER') ?? Platform.environment['USER'] ?? 'user',
       'PATH': path,
-      if (DotEnvLoader.get('JAVA_HOME') != null)
-        'JAVA_HOME': DotEnvLoader.get('JAVA_HOME')!,
+      if (javaHome != null) 'JAVA_HOME': javaHome,
       if (DotEnvLoader.get('GGUF_CONTEXT_SIZE') != null)
         'GGUF_CONTEXT_SIZE': DotEnvLoader.get('GGUF_CONTEXT_SIZE')!,
       if (DotEnvLoader.get('ALJABR_MODE') != null)

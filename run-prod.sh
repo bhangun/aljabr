@@ -2,9 +2,9 @@
 set -e
 
 # ==============================================================================
-# Aljabr Studio - Production Runtime Launcher
+# Aljabr Vibe Coder - Production Runtime Launcher
 # ==============================================================================
-# In production mode, Aljabr Studio runs as a standalone professional app.
+# In production mode, Aljabr Vibe Coder runs as a standalone professional app.
 # The background engine automatically provisions binaries from GitHub Releases:
 #   • https://github.com/bhangun/aljabr
 #   • https://github.com/bhangun/wayang

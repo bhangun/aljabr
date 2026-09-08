@@ -5,8 +5,10 @@ import 'package:aljabr_plugin_chat/aljabr_plugin_chat.dart';
 import 'package:aljabr_plugin_editor/aljabr_plugin_editor.dart';
 import 'package:aljabr_plugin_diff/aljabr_plugin_diff.dart';
 import '../../../theme/app_colors.dart';
+import '../../sidebar/sidebar_widget.dart';
 
 enum VsCodeSidebarTab {
+  projects,
   explorer,
   search,
   sourceControl,
@@ -16,7 +18,7 @@ enum VsCodeSidebarTab {
 
 class VsCodeSidebarTabNotifier extends Notifier<VsCodeSidebarTab> {
   @override
-  VsCodeSidebarTab build() => VsCodeSidebarTab.explorer;
+  VsCodeSidebarTab build() => VsCodeSidebarTab.projects;
 
   void select(VsCodeSidebarTab tab) => state = tab;
 }
@@ -56,6 +58,7 @@ class _VsCodeSidebarViewState extends ConsumerState<VsCodeSidebarView> {
         children: [
           Expanded(
             child: switch (activeTab) {
+              VsCodeSidebarTab.projects => const SidebarWidget(),
               VsCodeSidebarTab.explorer => const FileExplorerPanel(),
               VsCodeSidebarTab.search => _buildSearchPanel(),
               VsCodeSidebarTab.sourceControl => _buildSourceControlPanel(),

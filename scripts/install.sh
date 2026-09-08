@@ -2,7 +2,7 @@
 set -e
 
 # ==============================================================================
-# Aljabr Studio, Wayang Agent Platform & Gollek Inference Engine Installer
+# Aljabr Vibe Coder, Wayang Agent Platform & Gollek Inference Engine Installer
 # Supported OS: macOS (Apple Silicon / Intel), Linux (x86_64 / arm64)
 # Usage: curl -fsSL https://get.wayang.tech/install.sh | bash
 # ==============================================================================
@@ -122,4 +122,4 @@ echo -e "\n${GREEN}${BOLD}🎉 Installation Complete!${NC}"
 echo -e "You can now launch the Aljabr GUI Studio or run CLI services:"
 echo -e "  • Start Gollek:  ${CYAN}gollek${NC}"
 echo -e "  • Start Wayang:  ${CYAN}wayang${NC}"
-echo -e "  • Launch GUI:    Open ${CYAN}Aljabr Studio${NC} from Applications or run ${CYAN}flutter run${NC}"
+echo -e "  • Launch GUI:    Open ${CYAN}Aljabr Vibe Coder${NC} from Applications or run ${CYAN}flutter run${NC}"

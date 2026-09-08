@@ -105,7 +105,8 @@ class BackendInstallerService {
         (File('$aljabrApiDir/start-local.sh').existsSync() ||
             File('$aljabrApiDir/pom.xml').existsSync() ||
             File('$aljabrApiDir/wayang').existsSync() ||
-            File('$aljabrApiDir/target/quarkus-app/quarkus-run.jar').existsSync());
+            File('$aljabrApiDir/target/quarkus-app/quarkus-run.jar')
+                .existsSync());
 
     bool gollekFound = Directory(gollekDir).existsSync() &&
         (File('$gollekDir/scripts/run-dev-server.sh').existsSync() ||
@@ -149,8 +150,10 @@ class BackendInstallerService {
     }
 
     final isDevMode = Platform.environment['ALJABR_MODE'] == 'development' ||
-        Directory('${DynamicPathResolver.resolveWorkspaceRoot()}/Projects').existsSync() ||
-        Directory('${DynamicPathResolver.resolveWorkspaceRoot()}/Families').existsSync();
+        Directory('${DynamicPathResolver.resolveWorkspaceRoot()}/Projects')
+            .existsSync() ||
+        Directory('${DynamicPathResolver.resolveWorkspaceRoot()}/Families')
+            .existsSync();
 
     return BackendInstallationInfo(
       isAljabrFound: aljabrFound,
@@ -226,7 +229,8 @@ class BackendInstallerService {
     yield InstallProgress(
       stage: InstallStage.checkingSystem,
       progress: 0.1,
-      statusMessage: 'Inspecting hardware capabilities & release repositories...',
+      statusMessage:
+          'Inspecting hardware capabilities & release repositories...',
       detailedLog:
           '• Platform: ${Platform.operatingSystem} (${Platform.version})\n• GitHub Release Sources:\n  - $aljabrRepo\n  - $wayangRepo\n  - $gollekRepo',
     );
@@ -286,9 +290,12 @@ fi
 
     // Symlink to ~/.local/bin
     try {
-      await Process.run('ln', ['-sf', gollekBinary.path, '${localBin.path}/gollek']);
-      await Process.run('ln', ['-sf', wayangBinary.path, '${localBin.path}/wayang']);
-      await Process.run('ln', ['-sf', wayangBinary.path, '${localBin.path}/aljabr']);
+      await Process.run(
+          'ln', ['-sf', gollekBinary.path, '${localBin.path}/gollek']);
+      await Process.run(
+          'ln', ['-sf', wayangBinary.path, '${localBin.path}/wayang']);
+      await Process.run(
+          'ln', ['-sf', wayangBinary.path, '${localBin.path}/aljabr']);
     } catch (_) {}
 
     yield InstallProgress(
@@ -304,7 +311,7 @@ fi
       stage: InstallStage.completed,
       progress: 1.0,
       statusMessage: 'Installation completed successfully! Ready to boot.',
-      detailedLog: '✅ Aljabr Studio and Gollek Inference Engine are ready.',
+      detailedLog: '✅ Aljabr Vibe Coder and Gollek Inference Engine are ready.',
     );
   }
 

@@ -46,7 +46,7 @@ class UpdateManagerService {
 
     return SystemUpdateManifest(
       gui: ComponentVersionInfo(
-        componentName: 'Aljabr Studio GUI',
+        componentName: 'Aljabr Vibe Coder',
         currentVersion: '0.1.0',
         latestVersion: '0.1.0',
         hasUpdate: false,

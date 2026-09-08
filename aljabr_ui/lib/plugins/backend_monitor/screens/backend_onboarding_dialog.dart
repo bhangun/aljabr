@@ -195,7 +195,7 @@ class _BackendOnboardingDialogState
         ),
         const SizedBox(height: 4),
         const Text(
-          'Aljabr Studio coordinates local neural inference (Gollek) with autonomous coding agent backends (Wayang/Aljabr).',
+          'Aljabr Vibe Coder coordinates local neural inference (Gollek) with autonomous coding agent backends (Wayang/Aljabr).',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 12.5),
         ),
         const Gap(14),
@@ -582,7 +582,7 @@ class _BackendOnboardingDialogState
           FilledButton.icon(
             onPressed: _finishAndLaunch,
             icon: const Icon(Icons.rocket_launch_rounded, size: 18),
-            label: const Text('Start Backends & Launch Aljabr Studio'),
+            label: const Text('Start Backends & Launch Aljabr Vibe Coder'),
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF238636),
               foregroundColor: Colors.white,

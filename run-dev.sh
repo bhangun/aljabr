@@ -2,7 +2,7 @@
 set -e
 
 # ==============================================================================
-# Aljabr Studio & Dual-Backend Development Launcher
+# Aljabr Vibe Coder & Dual-Backend Development Launcher
 # ==============================================================================
 # Usage:
 #   ./run-dev.sh [OPTIONS]

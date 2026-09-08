@@ -29,11 +29,26 @@ class ChatHeader extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Breadcrumb(project: project, session: session),
-          const Gap(10),
-          StatusBadge(status: session.status),
-          const Spacer(),
-          const HeaderActions(),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Breadcrumb(project: project, session: session),
+                  const Gap(10),
+                  StatusBadge(status: session.status),
+                ],
+              ),
+            ),
+          ),
+          const Gap(8),
+          const Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: HeaderActions(),
+            ),
+          ),
         ],
       ),
     );

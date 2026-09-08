@@ -10,7 +10,8 @@ class NavigationPlugin implements AljabrPlugin {
         id: pluginId,
         name: 'Aljabr Navigation & Shell Framework',
         version: '1.0.0',
-        description: 'Core activity bar, navigation groups, toolbar, and status bar',
+        description:
+            'Core activity bar, navigation groups, toolbar, and status bar',
       );
 
   @override
@@ -57,6 +58,18 @@ class NavigationPlugin implements AljabrPlugin {
     );
 
     // Activity Bar Contributions
+    context.ui.activityBar.register(
+      ActivityBarContribution(
+        id: 'aljabr.activity.projects',
+        ownerId: pluginId,
+        label: 'Projects & Sessions',
+        icon: Icons.source_outlined,
+        activeIcon: Icons.source,
+        section: ActivityBarSection.primary,
+        order: 5,
+      ),
+    );
+
     context.ui.activityBar.register(
       ActivityBarContribution(
         id: 'aljabr.activity.explorer',
@@ -122,17 +135,10 @@ class NavigationPlugin implements AljabrPlugin {
         builder: (ctx) => Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF238636).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(Icons.hub_rounded, size: 16, color: Color(0xFF3FB950)),
-            ),
+            Image.asset('assets/icons/aljabr-logo.png', height: 24),
             const SizedBox(width: 8),
             const Text(
-              'Aljabr Studio',
+              'Aljabr',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
@@ -145,7 +151,9 @@ class NavigationPlugin implements AljabrPlugin {
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
               decoration: BoxDecoration(
                 color: const Color(0xFF7928CA).withValues(alpha: 0.2),
-                border: Border.all(color: const Color(0xFF7928CA).withValues(alpha: 0.4), width: 0.8),
+                border: Border.all(
+                    color: const Color(0xFF7928CA).withValues(alpha: 0.4),
+                    width: 0.8),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text(

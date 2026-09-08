@@ -25,7 +25,7 @@ class Wayang < Formula
   def caveats
     <<~EOS
       🎉 Wayang Platform & Gollek Inference Engine installed!
-      Run `wayang` or launch Aljabr Studio GUI to start the dual-substrate environment.
+      Run `wayang` or launch Aljabr Vibe Coder to start the dual-substrate environment.
     EOS
   end
 

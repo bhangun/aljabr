@@ -1,10 +1,10 @@
 # ==============================================================================
-# Aljabr Studio, Wayang Agent Platform & Gollek Engine Installer for Windows
+# Aljabr Vibe Coder, Wayang Agent Platform & Gollek Engine Installer for Windows
 # Usage in PowerShell: iwr -useb https://get.wayang.tech/install.ps1 | iex
 # ==============================================================================
 
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host " Aljabr Studio, Wayang Agent Platform & Gollek Inference Engine" -ForegroundColor Cyan
+Write-Host " Aljabr Vibe Coder, Wayang Agent Platform & Gollek Inference Engine" -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 
 $InstallDir = "$HOME\.wayang"
@@ -40,5 +40,5 @@ if ($UserPath -notlike "*$BinDir*") {
     Write-Host "• Added $BinDir to User PATH." -ForegroundColor Yellow
 }
 
-Write-Host "`n🎉 Aljabr Studio & Dual-Substrates successfully installed on Windows!" -ForegroundColor Green
+Write-Host "`n🎉 Aljabr Vibe Coder & Dual-Substrates successfully installed on Windows!" -ForegroundColor Green
 Write-Host "Run 'gollek' and 'wayang' from PowerShell or launch Aljabr GUI Studio." -ForegroundColor Cyan

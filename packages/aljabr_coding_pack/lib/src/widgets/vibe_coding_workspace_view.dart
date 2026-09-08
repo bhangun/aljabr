@@ -3,10 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:aljabr_coding_core/aljabr_coding_core.dart';
 import 'package:aljabr_plugin_chat/aljabr_plugin_chat.dart';
 import 'package:aljabr_plugin_editor/aljabr_plugin_editor.dart';
+import 'package:aljabr_plugin_project/aljabr_plugin_project.dart';
 import 'workbench_splitter.dart';
 
 class VibeCodingWorkspaceView extends ConsumerStatefulWidget {
-  const VibeCodingWorkspaceView({super.key});
+  final Widget? sidebar;
+  final WidgetBuilder? sidebarBuilder;
+
+  const VibeCodingWorkspaceView({
+    super.key,
+    this.sidebar,
+    this.sidebarBuilder,
+  });
 
   @override
   ConsumerState<VibeCodingWorkspaceView> createState() =>
@@ -15,7 +23,9 @@ class VibeCodingWorkspaceView extends ConsumerStatefulWidget {
 
 class _VibeCodingWorkspaceViewState
     extends ConsumerState<VibeCodingWorkspaceView> {
+  bool _showSidebar = true;
   bool _showInspector = true;
+  double _sidebarWidth = 270.0;
   double _chatFlex = 5.0;
 
   @override
@@ -34,6 +44,38 @@ class _VibeCodingWorkspaceViewState
             ),
             child: Row(
               children: [
+                Tooltip(
+                  message: _showSidebar
+                      ? 'Hide Projects & Sessions'
+                      : 'Show Projects & Sessions',
+                  child: InkWell(
+                    onTap: () => setState(() => _showSidebar = !_showSidebar),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _showSidebar
+                                ? Icons.folder_copy
+                                : Icons.folder_copy_outlined,
+                            size: 15,
+                            color: _showSidebar ? AppTheme.accent : AppTheme.textMuted,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _showSidebar ? 'Projects' : 'Show Projects',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _showSidebar ? AppTheme.accent : AppTheme.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 const Icon(Icons.auto_awesome, size: 15, color: AppTheme.accent),
                 const SizedBox(width: 8),
                 const Text(
@@ -96,11 +138,35 @@ class _VibeCodingWorkspaceViewState
             ),
           ),
 
-          // Main Split Area: Conversational Agent Stream | Live Inspector
+          // Main Split Area: Project Panel | Conversational Agent Stream | Live Inspector
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_showSidebar) ...[
+                  SizedBox(
+                    width: _sidebarWidth,
+                    child: widget.sidebar ??
+                        (widget.sidebarBuilder != null
+                            ? widget.sidebarBuilder!(context)
+                            : Container(
+                                color: AppTheme.panel,
+                                child: const Column(
+                                  children: [
+                                    SidebarProjectSection(),
+                                  ],
+                                ),
+                              )),
+                  ),
+                  WorkbenchSplitter(
+                    axis: SplitterAxis.horizontal,
+                    onDrag: (delta) {
+                      setState(() {
+                        _sidebarWidth = (_sidebarWidth + delta).clamp(200.0, 500.0);
+                      });
+                    },
+                  ),
+                ],
                 Expanded(
                   flex: _chatFlex.round(),
                   child: const ChatPanel(slashCommands: []),

@@ -106,29 +106,34 @@ class EditorPanelShell extends ConsumerWidget {
                 ),
                 const SizedBox(width: 4),
                 // Workspace Toolchain & Status Chip
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                  decoration: BoxDecoration(
-                    color: AppTheme.panelAlt,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: AppTheme.border),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.shield_outlined,
-                          size: 11, color: Color(0xFF34C759)),
-                      SizedBox(width: 4),
-                      Text(
-                        'Sonar / Verified',
-                        style: TextStyle(
-                          color: AppTheme.textMuted,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w500,
-                        ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: AppTheme.panelAlt,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppTheme.border),
                       ),
-                    ],
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shield_outlined,
+                              size: 11, color: Color(0xFF34C759)),
+                          SizedBox(width: 4),
+                          Text(
+                            'Sonar / Verified',
+                            style: TextStyle(
+                              color: AppTheme.textMuted,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],

@@ -250,25 +250,28 @@ class _CodeEditorPanelState extends ConsumerState<CodeEditorPanel> {
     return Container(
       color: AppTheme.panel,
       child: const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.code_rounded, size: 48, color: AppTheme.textMuted),
-            SizedBox(height: 12),
-            Text(
-              'No File Open',
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.code_rounded, size: 48, color: AppTheme.textMuted),
+              SizedBox(height: 12),
+              Text(
+                'No File Open',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            SizedBox(height: 6),
-            Text(
-              'Select a file from the explorer on the left to edit',
-              style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
-            ),
-          ],
+              SizedBox(height: 6),
+              Text(
+                'Select a file from the explorer on the left to edit',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+              ),
+            ],
+          ),
         ),
       ),
     );

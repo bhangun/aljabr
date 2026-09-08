@@ -17,9 +17,12 @@ class CodingAgentPluginPack implements AljabrPlugin {
   static const pluginId = 'aljabr.coding_agent_pack';
 
   final List<AljabrPlugin> subPlugins;
+  final WidgetBuilder? vibeSidebarBuilder;
 
-  CodingAgentPluginPack({List<AljabrPlugin>? plugins})
-      : subPlugins = plugins ??
+  CodingAgentPluginPack({
+    List<AljabrPlugin>? plugins,
+    this.vibeSidebarBuilder,
+  })  : subPlugins = plugins ??
             [
               ChatPlugin(),
               EditorPlugin(),
@@ -41,15 +44,15 @@ class CodingAgentPluginPack implements AljabrPlugin {
             'Comprehensive AI coding assistant suite, VS Code style editor, diff review, and agent execution',
       );
 
-  static Widget _buildVibeView(BuildContext context) =>
-      const VibeCodingWorkspaceView();
+  Widget _buildVibeView(BuildContext context) =>
+      VibeCodingWorkspaceView(sidebarBuilder: vibeSidebarBuilder);
 
   @override
   Future<void> activate(PluginContext context) async {
 
     // 2. Register the specialized Vibe Coding Workspace Mode
     context.ui.modes.register(
-      const WorkspaceMode(
+      WorkspaceMode(
         id: CoreWorkspaceModes.vibe,
         title: 'Vibe Coding',
         subtitle: 'Agent-First',

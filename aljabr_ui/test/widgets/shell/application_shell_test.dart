@@ -26,6 +26,8 @@ void main() {
 
       expect(find.byType(ApplicationShell), findsOneWidget);
       expect(find.byType(ShellRegionHost), findsNWidgets(3));
+
+      await tester.pump(const Duration(milliseconds: 1000));
     });
   });
 }
